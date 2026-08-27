@@ -1,0 +1,11 @@
+[package]
+name = "P_Practice"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.45"
+tantivy = "0.26.1"
+tempdir = "0.3.7"
+uuid = {version="1.25.0", features=["v4"]}
+walkdir = "2.5.0"
