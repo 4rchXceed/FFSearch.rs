@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.45"
+extractous = "0.3.0"
 tantivy = "0.26.1"
 tempdir = "0.3.7"
 uuid = {version="1.25.0", features=["v4"]}

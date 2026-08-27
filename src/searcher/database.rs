@@ -14,6 +14,9 @@ use uuid::Uuid;
 
 use crate::{not_err_check, not_null_check, searcher::config::DatabaseConfig, utils::join_path};
 
+/// Max limit for search results, used because we need to.
+static MAX_LIMIT: usize = 9_999_999;
+
 /// The Document struct is a basic struct that represents a Document with it's title and content, it's unique ID, and the latest modification date.
 /// It is used to represent a document in the database.
 #[derive(Debug, Clone)]
@@ -43,6 +46,28 @@ impl Document {
     }
 }
 
+/// This enum represents the possible errors that can occur when using the database
+#[derive(Debug, Clone)]
+pub enum DatabaseError {
+    CouldNotCreateReaderError(TantivyError),
+    SearchFailed(TantivyError),
+    NoResult,
+    FailedToAddDocument(TantivyError),
+    FailedToRemoveDocument(TantivyError),
+    IndexCommitError(TantivyError),
+}
+
+/// This enum represents the possible errors that can occur when initializing the database
+#[derive(Debug)]
+pub enum DatabaseInitError {
+    /// The folder path is probably invalid, check the error for more information
+    IndexCreationError(TantivyError),
+    IndexWriterCreationError(TantivyError),
+    CouldNotCreateDirError(Error),
+    ShouldNotHappenError,
+    CouldNotCreateReaderError(TantivyError),
+}
+
 /// The database is the main search engine of the program.
 /// It uses https://github.com/quickwit-oss/tantivy under the hood.
 /// It contains a folder path, database save folder, config, index writer (the db), and a schema
@@ -67,16 +92,6 @@ pub struct Database {
     uuid_field: Field,
     /// The modification date field
     mod_date_field: Field,
-}
-/// This enum represents the possible errors that can occur when initializing the database
-#[derive(Debug)]
-pub enum DatabaseInitError {
-    /// The folder path is probably invalid, check the error for more information
-    IndexCreationError(TantivyError),
-    IndexWriterCreationError(TantivyError),
-    CouldNotCreateReaderError(TantivyError),
-    CouldNotCreateDirError(Error),
-    ShouldNotHappenError,
 }
 
 impl Database {
@@ -178,7 +193,7 @@ impl Database {
     /// Returns:
     /// - Ok(IndexReader): the index reader if everything went well
     /// - Err(DatabaseInitError): the error if something went wrong
-    fn get_reader(&self) -> Result<IndexReader, DatabaseInitError> {
+    fn get_reader(&self) -> Result<IndexReader, DatabaseError> {
         let reader = self
             .index
             .reader_builder()
@@ -187,7 +202,7 @@ impl Database {
         not_err_check!(
             reader,
             reader,
-            Err(DatabaseInitError::CouldNotCreateReaderError(
+            Err(DatabaseError::CouldNotCreateReaderError(
                 reader.err().unwrap()
             ))
         );
@@ -216,14 +231,18 @@ impl Database {
     /// Adds a document to the database
     /// Parameters:
     /// - path: the path of the document
-    fn add_document(
+    pub fn add_document(
         &mut self,
         path: String,
         content: String,
         mod_date: i64,
-    ) -> Result<String, TantivyError> {
+    ) -> Result<String, DatabaseError> {
         let uuid = Uuid::new_v4().to_string();
-        return self.add_document_internal(path, content, mod_date, uuid);
+        let res = self.add_document_internal(path, content, mod_date, uuid.clone());
+        if res.is_err() {
+            return Err(DatabaseError::FailedToAddDocument(res.err().unwrap()));
+        }
+        return Ok(res.unwrap());
     }
 
     /// Since it's also used by update, we create an internal version that doesn't change it's UUID
@@ -314,19 +333,27 @@ impl Database {
     /// - path: the path of the document to remove
     /// Returns:
     /// - Result<(), ()>: Ok(()) if the document was removed, Err(()) if the document was not found
-    pub fn remove_document(&mut self, path: String) -> Result<String, ()> {
+    pub fn remove_document(&mut self, path: String) -> Result<String, DatabaseError> {
         let document = self.get(path.clone());
-        not_null_check!(document, document, Err(()));
+        not_err_check!(document, document, Err(document.err().unwrap()));
         let term_query = TermQuery::new(
             Term::from_field_text(self.uuid_field, &document.uuid),
             IndexRecordOption::Basic,
         );
 
         let res = self.index_writer.delete_query(term_query.box_clone());
-        not_err_check!(res, res, Err(()));
+        not_err_check!(
+            res,
+            res,
+            Err(DatabaseError::FailedToRemoveDocument(res.err().unwrap()))
+        );
 
         let res = self.index_writer.commit();
-        not_err_check!(res, res, Err(()));
+        not_err_check!(
+            res,
+            res,
+            Err(DatabaseError::IndexCommitError(res.err().unwrap()))
+        );
 
         return Ok(document.uuid);
     }
@@ -341,11 +368,15 @@ impl Database {
         path: String,
         new_content: String,
         mod_date: i64,
-    ) -> Result<(), ()> {
+    ) -> Result<(), DatabaseError> {
         let old_doc_uuid = self.remove_document(path.clone());
-        not_err_check!(old_doc_uuid, old_doc_uuid, Err(()));
+        not_err_check!(old_doc_uuid, old_doc_uuid, Err(old_doc_uuid.err().unwrap()));
         let res = self.add_document_internal(path, new_content, mod_date, old_doc_uuid);
-        not_err_check!(res, res, Err(()));
+        not_err_check!(
+            res,
+            res,
+            Err(DatabaseError::FailedToAddDocument(res.err().unwrap()))
+        );
 
         return Ok(());
     }
@@ -355,24 +386,33 @@ impl Database {
     /// - path: the path to the file
     /// Returns:
     /// - Option<Document>: the document if it exists, None if it doesn't
-    pub fn get(&self, path: String) -> Option<Document> {
+    pub fn get(&self, path: String) -> Result<Document, DatabaseError> {
         let reader = self.get_reader();
-        not_err_check!(reader, reader, None);
+        not_err_check!(reader, reader, Err(reader.err().unwrap()));
 
         let searcher = reader.searcher();
         let term = Term::from_field_text(self.path_field, path.as_str());
         let term_query = TermQuery::new(term, IndexRecordOption::Basic);
         let top_docs = searcher.search(&term_query, &TopDocs::with_limit(1).order_by_score());
 
-        not_err_check!(top_docs, top_docs, None);
+        not_err_check!(
+            top_docs,
+            top_docs,
+            Err(DatabaseError::SearchFailed(top_docs.err().unwrap()))
+        );
 
         let the_only_doc = top_docs
             .iter()
             .map(|(_, addr)| self.document_from_tantivy_doc(*addr))
             .filter(|doc| doc.is_some())
-            .find(|doc| doc.as_ref().unwrap().path == path);
+            .map(|doc| doc.unwrap())
+            .find(|doc| doc.path == path);
 
-        return the_only_doc.unwrap_or(None);
+        if the_only_doc.is_some() {
+            return Ok(the_only_doc.unwrap());
+        } else {
+            return Err(DatabaseError::NoResult);
+        }
     }
 
     /// Gets the config of the Database
@@ -392,10 +432,8 @@ impl Database {
         let searcher = reader.searcher();
         let all_query = AllQuery {};
 
-        let top_docs = searcher.search(
-            &all_query,
-            &TopDocs::with_limit(usize::MAX).order_by_score(),
-        );
+        let top_docs =
+            searcher.search(&all_query, &TopDocs::with_limit(MAX_LIMIT).order_by_score());
 
         not_err_check!(top_docs, top_docs, Vec::new());
 
@@ -480,14 +518,17 @@ mod tests {
     fn test_get_and_add_document() {
         let (database, temp_dir) = setup();
         let doc = database.get(String::from("file1.txt"));
-        assert!(doc.is_some());
+        assert!(doc.is_ok());
         assert_eq!(doc.unwrap().content, FIRST_FILE_CONTENT);
 
         let notdoc = database.get(String::from("file2.txt"));
-        assert!(notdoc.is_none());
+        assert!(match notdoc.clone().err().unwrap() {
+            DatabaseError::NoResult => true,
+            _ => false,
+        });
 
         let doc2 = database.get(String::from("dir1/file2.txt"));
-        assert!(doc2.is_some());
+        assert!(doc2.is_ok());
         assert_eq!(doc2.unwrap().content, SECOND_FILE_CONTENT);
         let _ = temp_dir.close();
     }
@@ -497,12 +538,12 @@ mod tests {
     fn test_remove_document() {
         let (mut database, temp_dir) = setup();
         let doc = database.get(String::from("file1.txt"));
-        assert!(doc.is_some());
+        assert!(doc.is_ok());
 
         let _ = database.remove_document(String::from("file1.txt"));
 
         let doc2 = database.get(String::from("file1.txt"));
-        assert!(doc2.is_none());
+        assert!(doc2.is_err());
         let _ = temp_dir.close();
     }
 
@@ -531,6 +572,6 @@ mod tests {
 
         assert_eq!(results.len(), 2);
 
-        temp_dir.close();
+        let _ = temp_dir.close();
     }
 }
