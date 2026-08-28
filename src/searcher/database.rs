@@ -1,4 +1,4 @@
-use std::io::Error;
+use std::{io::Error, path::Path};
 
 use tantivy::{
     DateTime, DocAddress, Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument,
@@ -24,7 +24,7 @@ pub struct Document {
     /// The title
     pub path: String,
     /// The content
-    pub content: String,
+    pub content: Option<String>,
     /// The uuid
     pub uuid: String,
     /// The creation date
@@ -36,9 +36,14 @@ impl Document {
     /// Parameters:
     /// - title: the title
     /// - content: the content
-    pub fn new(path: String, content: String, uuid: String, modification_date: DateTime) -> Self {
+    pub fn new(
+        path: String,
+        content: Option<String>,
+        uuid: String,
+        modification_date: DateTime,
+    ) -> Self {
         return Self {
-            path,
+            path: path,
             content: content,
             uuid: uuid,
             modification_date: modification_date,
@@ -55,33 +60,22 @@ pub enum DatabaseError {
     FailedToAddDocument(TantivyError),
     FailedToRemoveDocument(TantivyError),
     IndexCommitError(TantivyError),
-}
-
-/// This enum represents the possible errors that can occur when initializing the database
-#[derive(Debug)]
-pub enum DatabaseInitError {
-    /// The folder path is probably invalid, check the error for more information
+    IndexCloseError(TantivyError),
     IndexCreationError(TantivyError),
     IndexWriterCreationError(TantivyError),
-    CouldNotCreateDirError(Error),
+    CouldNotCreateDirError,
     ShouldNotHappenError,
-    CouldNotCreateReaderError(TantivyError),
+    CouldNotOpenIndexError(TantivyError),
 }
 
 /// The database is the main search engine of the program.
 /// It uses https://github.com/quickwit-oss/tantivy under the hood.
 /// It contains a folder path, database save folder, config, index writer (the db), and a schema
 pub struct Database {
-    /// The folder to search in
-    folder: String,
-    /// Where to save tantivy's data
-    database_save_folder: String,
     /// Config
     config: DatabaseConfig,
     /// The write head for the index, used to add documents to the database
     index_writer: IndexWriter,
-    /// The schema of the database
-    schema: Schema,
     /// The index
     index: Index,
     /// The path fields:
@@ -102,35 +96,41 @@ impl Database {
     /// Returns:
     /// - Ok(Database): the database if everything went well
     /// - Err(DatabaseInitError): the error if something went wrong
-    pub fn new(folder: String, config: DatabaseConfig) -> Result<Self, DatabaseInitError> {
+    pub fn new(folder: String, config: DatabaseConfig) -> Result<Self, DatabaseError> {
         // Create index path
         let index_path = join_path(folder.as_str(), config.database_folder_prefix.as_str());
 
-        let res = std::fs::create_dir_all(&index_path);
-        not_err_check!(
-            res,
-            res,
-            Err(DatabaseInitError::CouldNotCreateDirError(
-                res.err().unwrap()
-            ))
-        );
+        let index: Index;
+        let schema: Schema;
+        if !Path::new(&index_path).exists() {
+            let res = std::fs::create_dir_all(&index_path);
+            not_err_check!(res, res, Err(DatabaseError::CouldNotCreateDirError));
 
-        let schema = Self::build_schema();
+            schema = Self::build_schema();
 
-        // Create the index
-        let index = Index::create_in_dir(&index_path, schema.clone());
-        not_err_check!(
-            index,
-            index,
-            Err(DatabaseInitError::IndexCreationError(index.err().unwrap()))
-        );
+            // Create the index
+            let index_op = Index::create_in_dir(&index_path, schema.clone());
+            if index_op.is_err() {
+                return Err(DatabaseError::IndexCreationError(index_op.err().unwrap()));
+            }
+            index = index_op.unwrap();
+        } else {
+            let index_op = Index::open_in_dir(&index_path);
+            if index_op.is_err() {
+                return Err(DatabaseError::CouldNotOpenIndexError(
+                    index_op.err().unwrap(),
+                ));
+            }
+            index = index_op.unwrap();
+            schema = index.schema();
+        }
 
         // Create the index writer
         let index_writer = index.writer(config.max_db_size);
         not_err_check!(
             index_writer,
             index_writer,
-            Err(DatabaseInitError::IndexWriterCreationError(
+            Err(DatabaseError::IndexWriterCreationError(
                 index_writer.err().unwrap(),
             ))
         );
@@ -140,47 +140,31 @@ impl Database {
         not_err_check!(
             path_field,
             path_field,
-            Err(DatabaseInitError::ShouldNotHappenError)
+            Err(DatabaseError::ShouldNotHappenError)
         );
         let content_field = schema.get_field("content");
         not_err_check!(
             content_field,
             content_field,
-            Err(DatabaseInitError::ShouldNotHappenError)
+            Err(DatabaseError::ShouldNotHappenError)
         );
         let uuid_field = schema.get_field("uuid");
         not_err_check!(
             uuid_field,
             uuid_field,
-            Err(DatabaseInitError::ShouldNotHappenError)
+            Err(DatabaseError::ShouldNotHappenError)
         );
         let mod_date_field = schema.get_field("moddate");
         not_err_check!(
             mod_date_field,
             mod_date_field,
-            Err(DatabaseInitError::ShouldNotHappenError)
-        );
-
-        // Create the index reader
-        let reader = index
-            .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
-            .try_into();
-        not_err_check!(
-            reader,
-            reader,
-            Err(DatabaseInitError::CouldNotCreateReaderError(
-                reader.err().unwrap()
-            ))
+            Err(DatabaseError::ShouldNotHappenError)
         );
 
         // Return the database
         return Ok(Self {
-            folder: folder,
-            database_save_folder: index_path,
             config: config,
             index_writer: index_writer,
-            schema: schema,
             index: index,
             content_field: content_field,
             path_field: path_field,
@@ -197,7 +181,7 @@ impl Database {
         let reader = self
             .index
             .reader_builder()
-            .reload_policy(ReloadPolicy::OnCommitWithDelay)
+            // .reload_policy(ReloadPolicy::OnCommitWithDelay)
             .try_into();
         not_err_check!(
             reader,
@@ -286,7 +270,7 @@ impl Database {
 
         return top_docs
             .iter()
-            .map(|(_, addr)| self.document_from_tantivy_doc(*addr))
+            .map(|(_, addr)| self.document_from_tantivy_doc(*addr, true))
             .filter(|d| d.is_some())
             .map(|d| d.unwrap())
             .collect();
@@ -297,7 +281,7 @@ impl Database {
     /// - doc: the Tantivy document to convert
     /// Returns:
     /// - Option<Document>: the converted document, or None if the conversion failed
-    fn document_from_tantivy_doc(&self, doc: DocAddress) -> Option<Document> {
+    fn document_from_tantivy_doc(&self, doc: DocAddress, optimized: bool) -> Option<Document> {
         let reader = self.get_reader();
         not_err_check!(reader, reader, None);
 
@@ -308,10 +292,6 @@ impl Database {
         let path = path.as_str();
         not_null_check!(path, path, None);
 
-        not_null_check!(content, doc.get_first(self.content_field), None);
-        let content = content.as_str();
-        not_null_check!(content, content, None);
-
         not_null_check!(uuid, doc.get_first(self.uuid_field), None);
         let uuid = uuid.as_str();
         not_null_check!(uuid, uuid, None);
@@ -320,12 +300,25 @@ impl Database {
         let mod_date = mod_date.as_datetime();
         not_null_check!(mod_date, mod_date, None);
 
-        return Some(Document::new(
-            String::from(path),
-            String::from(content),
-            String::from(uuid),
-            mod_date.clone(),
-        ));
+        if !optimized {
+            not_null_check!(content, doc.get_first(self.content_field), None);
+            let content = content.as_str();
+            not_null_check!(content, content, None);
+
+            return Some(Document::new(
+                String::from(path),
+                Some(String::from(content)),
+                String::from(uuid),
+                mod_date.clone(),
+            ));
+        } else {
+            return Some(Document::new(
+                String::from(path),
+                None,
+                String::from(uuid),
+                mod_date.clone(),
+            ));
+        }
     }
 
     /// Removes a document from the database
@@ -403,7 +396,7 @@ impl Database {
 
         let the_only_doc = top_docs
             .iter()
-            .map(|(_, addr)| self.document_from_tantivy_doc(*addr))
+            .map(|(_, addr)| self.document_from_tantivy_doc(*addr, false))
             .filter(|doc| doc.is_some())
             .map(|doc| doc.unwrap())
             .find(|doc| doc.path == path);
@@ -424,7 +417,7 @@ impl Database {
 
     /// Get all Database's documents
     /// Returns:
-    /// - Vec<Document>: all the documents
+    /// - Vec<Document>: all the documents WITHOUT THEIR CONENT
     pub fn get_all(&self) -> Vec<Document> {
         let reader = self.get_reader();
         not_err_check!(reader, reader, Vec::new());
@@ -439,10 +432,20 @@ impl Database {
 
         return top_docs
             .iter()
-            .map(|(_, addr)| self.document_from_tantivy_doc(*addr))
+            .map(|(_, addr)| self.document_from_tantivy_doc(*addr, true))
             .filter(|doc| doc.is_some())
             .map(|doc| doc.unwrap())
             .collect();
+    }
+
+    pub fn close(self) -> Result<(), DatabaseError> {
+        let res = self.index_writer.wait_merging_threads();
+        not_err_check!(
+            res,
+            res,
+            Err(DatabaseError::IndexCloseError(res.err().unwrap()))
+        );
+        Ok(())
     }
 }
 
@@ -454,6 +457,8 @@ mod tests {
     //     fs::{File, create_dir},
     //     io::Write,
     // };
+
+    use crate::searcher::database;
 
     use super::*;
     use chrono;
@@ -517,19 +522,20 @@ mod tests {
     #[test]
     fn test_get_and_add_document() {
         let (database, temp_dir) = setup();
+
         let doc = database.get(String::from("file1.txt"));
         assert!(doc.is_ok());
-        assert_eq!(doc.unwrap().content, FIRST_FILE_CONTENT);
+        assert_eq!(doc.unwrap().content.unwrap(), FIRST_FILE_CONTENT);
 
-        let notdoc = database.get(String::from("file2.txt"));
-        assert!(match notdoc.clone().err().unwrap() {
+        let not_found_doc = database.get(String::from("file2.txt"));
+        assert!(match not_found_doc.clone().err().unwrap() {
             DatabaseError::NoResult => true,
             _ => false,
         });
 
         let doc2 = database.get(String::from("dir1/file2.txt"));
         assert!(doc2.is_ok());
-        assert_eq!(doc2.unwrap().content, SECOND_FILE_CONTENT);
+        assert_eq!(doc2.unwrap().content.unwrap(), SECOND_FILE_CONTENT);
         let _ = temp_dir.close();
     }
 
@@ -554,7 +560,7 @@ mod tests {
         let results = database.search(String::from("catgirls"), 10);
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, String::from("file1.txt"));
-        assert_eq!(results[0].content, String::from(FIRST_FILE_CONTENT));
+        assert_eq!(results[0].content, None);
 
         let no_results = database.search(String::from("NOO"), 10);
         assert_eq!(no_results.len(), 0);
@@ -564,6 +570,7 @@ mod tests {
         let _ = temp_dir.close();
     }
 
+    /// Tests the get_all function of the database
     #[test]
     fn test_all() {
         let (database, temp_dir) = setup();
@@ -571,6 +578,32 @@ mod tests {
         let results = database.get_all();
 
         assert_eq!(results.len(), 2);
+
+        let _ = temp_dir.close();
+    }
+
+    #[test]
+    fn test_two_times_same_folder() {
+        let (mut database, temp_dir) = setup();
+        let _ = database.add_document(
+            String::from("file1.txt"),
+            String::from(FIRST_FILE_CONTENT),
+            0,
+        );
+        let _ = database.add_document(
+            String::from("file2.txt"),
+            String::from(SECOND_FILE_CONTENT),
+            0,
+        );
+        let temp_dir_path = temp_dir.path().to_str().unwrap().to_string();
+        assert!(database.close().is_ok());
+        let database2 = Database::new(String::from(temp_dir_path), DatabaseConfig::new());
+
+        assert!(database2.is_ok());
+        let database2 = database2.unwrap();
+
+        let res = database2.get(String::from("file1.txt"));
+        assert!(res.is_ok());
 
         let _ = temp_dir.close();
     }

@@ -5,6 +5,7 @@ use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     file_indexer::{config::FileIndexerConfig, text_extractor::TextExtractor},
+    not_err_check,
     searcher::database::{Database, DatabaseError, Document},
     utils::{same_path, trim_custom},
 };
@@ -16,8 +17,6 @@ pub enum FileIndexerError {
     GetFileMetaError(std::io::Error),
     /// Failed to open file to write modification date.
     OpenFileToWriteModDateError(std::io::Error),
-    /// Failed to extract file content.
-    FileExtractionError(extractous::Error),
     /// Failed to update document in the database.
     CouldNotUpdateDocument(DatabaseError),
     /// Failed to add document to the database.
@@ -26,6 +25,8 @@ pub enum FileIndexerError {
     InvalidFilePath(String),
     /// Failed to remove document from the database.
     FailedToRemoveDocument(DatabaseError),
+    /// The database failed to init
+    DatabaseInitError(DatabaseError),
 }
 
 /// This is the file indexer, responsible for indexing files in a given folder to the database.
@@ -44,11 +45,13 @@ impl FileIndexer {
     /// Creates a new file indexer with the given folder, database, and configuration.
     /// Parameters:
     /// - folder: the folder to index. (absolute path is REALLY recommended)
-    /// - database: the database to store the index in.
     /// - config: the configuration for the file indexer.
     /// Returns: a new FileIndexer instance.
-    pub fn new(folder: String, database: Database, config: FileIndexerConfig) -> Self {
-        return Self {
+    pub fn new(folder: String, config: FileIndexerConfig) -> Result<Self, FileIndexerError> {
+        let database = Database::new(folder.clone(), config.clone().db_config)
+            .map_err(|e| FileIndexerError::DatabaseInitError(e))?;
+
+        return Ok(Self {
             folder: folder,
             db: database,
             extractor: TextExtractor::new(
@@ -56,8 +59,8 @@ impl FileIndexer {
                 config.enable_ocr,
                 &config.ocr_lang,
             ),
-            config,
-        };
+            config: config,
+        });
     }
 
     /// Checks if the given file is a valid filename for indexing.
@@ -137,7 +140,7 @@ impl FileIndexer {
     /// Parameters:
     /// - path: the file path to convert.
     /// Returns: the local file path as a string.
-    pub fn to_local_path(&self, path: String) -> Result<String, FileIndexerError> {
+    fn to_local_path(&self, path: String) -> Result<String, FileIndexerError> {
         let local_file_path = path.strip_prefix(self.folder.as_str());
         if local_file_path.is_none() {
             return Err(FileIndexerError::InvalidFilePath(path));
@@ -166,32 +169,32 @@ impl FileIndexer {
             let same = db_files
                 .iter()
                 .find(|h| same_path((**h).path.as_str(), local_file_path.as_str()));
-            let content = self.extractor.extract(file_path.clone());
-            if content.is_ok() {
-                let content = content.unwrap();
-                // Case: the file is not in the database, add it
-                if same.is_none() {
+            // Case: the file is not in the database, add it
+            if same.is_none() {
+                let content = self.extractor.extract(file_path.clone());
+                if content.is_ok() {
+                    let content = content.unwrap();
+
                     let res = self
                         .db
                         .add_document(local_file_path.clone(), content, timestamp);
                     if res.is_err() {
                         return Err(FileIndexerError::CouldNotAddDocument(res.err().unwrap()));
                     }
-                // Case: the file is in the database but the modification date has changed, update it
-                } else if same.unwrap().modification_date
-                    != DateTime::from_timestamp_secs(timestamp)
-                {
+                }
+            // Case: the file is in the database but the modification date has changed, update it
+            } else if same.unwrap().modification_date != DateTime::from_timestamp_secs(timestamp) {
+                let content = self.extractor.extract(file_path.clone());
+                if content.is_ok() {
+                    let content = content.unwrap();
+
                     let res = self.db.update_document(local_file_path, content, timestamp);
                     if res.is_err() {
                         return Err(FileIndexerError::CouldNotUpdateDocument(res.err().unwrap()));
                     }
                 }
-                return Ok(());
-            } else {
-                return Err(FileIndexerError::FileExtractionError(
-                    content.err().unwrap(),
-                ));
             }
+            return Ok(());
         } else {
             return Err(timestamp.err().unwrap());
         }
@@ -201,7 +204,7 @@ impl FileIndexer {
     /// Parameters:
     /// - file: the file to extract the modification date from.
     /// Returns: the modification date as a unix timestamp, or an error if the file could not be read.
-    pub fn extract_mod_date(&self, file: &PathBuf) -> Result<i64, FileIndexerError> {
+    fn extract_mod_date(&self, file: &PathBuf) -> Result<i64, FileIndexerError> {
         let meta = std::fs::metadata(file);
         if meta.is_ok() {
             let timestamp: i64;
@@ -231,7 +234,7 @@ impl FileIndexer {
     /// - file: the file to write the modification date to.
     /// - timestamp: the modification date as a unix timestamp.
     /// Returns: an error if the file could not be written, otherwise None.
-    pub fn write_mod_date(&self, file: &PathBuf, timestamp: i64) -> Result<(), FileIndexerError> {
+    fn write_mod_date(&self, file: &PathBuf, timestamp: i64) -> Result<(), FileIndexerError> {
         let file = File::open(file);
         if file.is_ok() {
             let file = file.unwrap();
@@ -309,13 +312,11 @@ mod tests {
 
         let folder = String::from(temp_dir_path.unwrap());
 
-        let db = Database::new(folder.clone(), DatabaseConfig::new());
-        assert!(db.is_ok());
-        let db = db.unwrap();
+        let file_indexer = FileIndexer::new(folder.clone(), FileIndexerConfig::new());
 
-        let file_indexer = FileIndexer::new(folder.clone(), db, FileIndexerConfig::new());
+        assert!(file_indexer.is_ok());
 
-        return (file_indexer, temp_dir, folder);
+        return (file_indexer.unwrap(), temp_dir, folder);
     }
 
     #[test]
@@ -335,11 +336,11 @@ mod tests {
 
         let mut first_content = String::from(FIRST_FILE_CONTENT);
         first_content.push('\n');
-        assert_eq!(file1.unwrap().content, first_content);
+        assert_eq!(file1.unwrap().content.unwrap(), first_content);
 
         let mut second_content = String::from(SECOND_FILE_CONTENT);
         second_content.push('\n');
-        assert_eq!(file2.unwrap().content, second_content);
+        assert_eq!(file2.unwrap().content.unwrap(), second_content);
 
         assert!(match file3.err().unwrap() {
             DatabaseError::NoResult => true,
@@ -371,13 +372,13 @@ mod tests {
         assert!(file1.is_ok());
         let mut first_content = String::from(FIRST_FILE_CONTENT);
         first_content.push('\n');
-        assert_eq!(file1.unwrap().content, first_content);
+        assert_eq!(file1.unwrap().content.unwrap(), first_content);
 
         let file3 = db.get(String::from("file2.txt"));
         assert!(file3.is_ok());
         let mut third_content = String::from(THIRD_FILE_CONTENT);
         third_content.push('\n');
-        assert_eq!(file3.unwrap().content, third_content);
+        assert_eq!(file3.unwrap().content.unwrap(), third_content);
 
         let _ = tempdir.close();
     }
@@ -392,11 +393,7 @@ mod tests {
             let _ = create_dir(folder.clone());
         }
 
-        let db = Database::new(folder.clone(), DatabaseConfig::new());
-        assert!(db.is_ok());
-        let db = db.unwrap();
-
-        let mut file_indexer = FileIndexer::new(folder.clone(), db, FileIndexerConfig::new());
+        let mut file_indexer = FileIndexer::new(folder.clone(), FileIndexerConfig::new()).unwrap();
         assert!(file_indexer.sync().is_empty());
         generate_test_datas(folder.as_str());
         assert!(file_indexer.sync().is_empty());

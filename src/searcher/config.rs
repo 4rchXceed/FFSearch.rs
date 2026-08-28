@@ -4,9 +4,6 @@ static DEFAULT_DATABASE_SIZE: usize = 100_000_000;
 /// The default save folder prefix
 /// Used by DatabaseConfig::new()
 static DEFAULT_SAVE_FOLDER_PREFIX: &str = ".ffsearch";
-/// The default maximum search limit
-/// Used by DatabaseConfig::new()
-static DEFAULT_MAX_SEARCH_LIMIT: usize = 1000;
 /// The database config stores the config for the Searcher/DB Component
 /// It is made of these elements:
 /// - max_db_size: usize -> the maximum size of a database in bytes
@@ -17,8 +14,6 @@ pub struct DatabaseConfig {
     pub max_db_size: usize,
     /// [public] The prefix for the save folder
     pub database_folder_prefix: String,
-    /// [public] The maximum number of search results to return
-    pub max_search_limit: usize,
 }
 
 impl DatabaseConfig {
@@ -30,7 +25,6 @@ impl DatabaseConfig {
         return DatabaseConfig {
             max_db_size: DEFAULT_DATABASE_SIZE,
             database_folder_prefix: String::from(DEFAULT_SAVE_FOLDER_PREFIX),
-            max_search_limit: DEFAULT_MAX_SEARCH_LIMIT,
         };
     }
 }

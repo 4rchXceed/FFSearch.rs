@@ -1,10 +1,19 @@
 use extractous::{Extractor, PdfParserConfig, TesseractOcrConfig};
 
+/// The text extractor is a part of the file indexer component.
+/// The text extractor is responsible for extracting text pretty much any file type.
+/// It supports OCR, DOCX, ... (see extractous documentation)
 pub struct TextExtractor {
+    /// The extractor instance used to extract text from files.
     extractor: Extractor,
 }
 
 impl TextExtractor {
+    /// Creates a new text extractor instance.
+    /// Parameters:
+    /// - max_length: the maximum length in chars of the extracted text
+    /// - enable_ocr: whether to enable OCR for the extractor
+    /// - ocr_language: the language to use for OCR (if enabled)
     pub fn new(max_length: usize, enable_ocr: bool, ocr_language: &str) -> Self {
         if enable_ocr {
             Self {
@@ -23,6 +32,10 @@ impl TextExtractor {
         }
     }
 
+    /// Extracts text from a file at the given path.
+    /// Returns the extracted text as a string, or an error if extraction fails.
+    /// Parameters:
+    /// - path: the path to the file to extract text from
     pub fn extract(&self, path: String) -> Result<String, extractous::Error> {
         let result = self.extractor.extract_file_to_string(path.as_str());
         if result.is_ok() {
