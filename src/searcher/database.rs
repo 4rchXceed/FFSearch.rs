@@ -1,15 +1,15 @@
-use std::{io::Error, path::Path};
+use std::path::Path;
 
 use tantivy::{
-    DateTime, DocAddress, Index, IndexReader, IndexWriter, ReloadPolicy, TantivyDocument,
-    TantivyError, Term,
+    DateTime, DocAddress, Index, IndexReader, IndexWriter, TantivyDocument, TantivyError, Term,
     collector::TopDocs,
     query::{AllQuery, QueryClone, QueryParser, TermQuery},
     schema::{
-        DATE_TIME_PRECISION_INDEXED, DateOptions, DateTimePrecision, Field, INDEXED,
-        IndexRecordOption, STORED, STRING, Schema, TEXT, Value,
+        DateOptions, DateTimePrecision, Field, INDEXED, IndexRecordOption, STORED, STRING, Schema,
+        TEXT, Value,
     },
 };
+use thiserror::Error;
 use uuid::Uuid;
 
 use crate::{not_err_check, not_null_check, searcher::config::DatabaseConfig, utils::join_path};
@@ -52,19 +52,31 @@ impl Document {
 }
 
 /// This enum represents the possible errors that can occur when using the database
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum DatabaseError {
+    #[error("Could not create db reader: {0}")]
     CouldNotCreateReaderError(TantivyError),
+    #[error("Search failed: {0}")]
     SearchFailed(TantivyError),
+    #[error("No result, expected one but got none")]
     NoResult,
+    #[error("Failed to add document: {0}")]
     FailedToAddDocument(TantivyError),
+    #[error("Failed to remove document: {0}")]
     FailedToRemoveDocument(TantivyError),
+    #[error("Failed to save changes: {0}")]
     IndexCommitError(TantivyError),
+    #[error("Failed to close db: {0}")]
     IndexCloseError(TantivyError),
+    #[error("Failed to create index: {0}")]
     IndexCreationError(TantivyError),
+    #[error("Failed to create index writer: {0}")]
     IndexWriterCreationError(TantivyError),
+    #[error("Could not create db directory")]
     CouldNotCreateDirError,
+    #[error("Should not happen")]
     ShouldNotHappenError,
+    #[error("Could not open index: {0}")]
     CouldNotOpenIndexError(TantivyError),
 }
 
@@ -86,6 +98,8 @@ pub struct Database {
     uuid_field: Field,
     /// The modification date field
     mod_date_field: Field,
+    /// The path to the index
+    index_path: String,
 }
 
 impl Database {
@@ -170,7 +184,13 @@ impl Database {
             path_field: path_field,
             uuid_field: uuid_field,
             mod_date_field: mod_date_field,
+            index_path: index_path,
         });
+    }
+
+    /// Returns the index path
+    pub fn get_index_path(&self) -> String {
+        return self.index_path.clone();
     }
 
     /// Builds the index reader
@@ -418,7 +438,7 @@ impl Database {
     /// Get all Database's documents
     /// Returns:
     /// - Vec<Document>: all the documents WITHOUT THEIR CONENT
-    pub fn get_all(&self) -> Vec<Document> {
+    pub fn get_all(&self, optimized: bool) -> Vec<Document> {
         let reader = self.get_reader();
         not_err_check!(reader, reader, Vec::new());
 
@@ -432,7 +452,7 @@ impl Database {
 
         return top_docs
             .iter()
-            .map(|(_, addr)| self.document_from_tantivy_doc(*addr, true))
+            .map(|(_, addr)| self.document_from_tantivy_doc(*addr, optimized))
             .filter(|doc| doc.is_some())
             .map(|doc| doc.unwrap())
             .collect();
@@ -575,7 +595,7 @@ mod tests {
     fn test_all() {
         let (database, temp_dir) = setup();
 
-        let results = database.get_all();
+        let results = database.get_all(true);
 
         assert_eq!(results.len(), 2);
 

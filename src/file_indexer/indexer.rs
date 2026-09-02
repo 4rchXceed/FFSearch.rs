@@ -1,31 +1,32 @@
 use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 
 use tantivy::DateTime;
+use thiserror::Error;
+use tqdm::tqdm;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
     file_indexer::{config::FileIndexerConfig, text_extractor::TextExtractor},
-    not_err_check,
     searcher::database::{Database, DatabaseError, Document},
     utils::{same_path, trim_custom},
 };
 
 /// Represents all possible errors that can occur during file indexing.
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FileIndexerError {
-    /// Failed to get file metadata.
+    #[error("Failed to get file metadata: {0}")]
     GetFileMetaError(std::io::Error),
-    /// Failed to open file to write modification date.
+    #[error("Failed to open file to write modification date: {0}")]
     OpenFileToWriteModDateError(std::io::Error),
-    /// Failed to update document in the database.
+    #[error("Failed to update document in the database: {0}")]
     CouldNotUpdateDocument(DatabaseError),
-    /// Failed to add document to the database.
+    #[error("Failed to add document to the database: {0}")]
     CouldNotAddDocument(DatabaseError),
-    /// Invalid file path.
+    #[error("Invalid file path: {0}")]
     InvalidFilePath(String),
-    /// Failed to remove document from the database.
+    #[error("Failed to remove document from the database: {0}")]
     FailedToRemoveDocument(DatabaseError),
-    /// The database failed to init
+    #[error("The database failed to init: {0}")]
     DatabaseInitError(DatabaseError),
 }
 
@@ -58,6 +59,7 @@ impl FileIndexer {
                 config.one_file_max_length,
                 config.enable_ocr,
                 &config.ocr_lang,
+                config.max_file_size,
             ),
             config: config,
         });
@@ -90,7 +92,7 @@ impl FileIndexer {
     /// Syncs the files in the folder to the database.
     /// Returns: a vector of any errors that occurred during syncing.
     pub fn sync(&mut self) -> Vec<FileIndexerError> {
-        let all = self.db.get_all();
+        let all = self.db.get_all(true);
 
         let files: Vec<PathBuf> = WalkDir::new(self.folder.clone())
             .into_iter()
@@ -110,7 +112,11 @@ impl FileIndexer {
             .collect();
 
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
-        for file in &files {
+        for file in tqdm(&files) {
+            // println!(
+            //     "Indexing: {}",
+            //     file.extension().unwrap_or_default().to_string_lossy()
+            // );
             let result = self.index_one_file(file, &all);
             if result.is_err() {
                 all_errors.push(result.err().unwrap());
@@ -271,10 +277,7 @@ mod tests {
 
     use tempdir::TempDir;
 
-    use crate::{
-        searcher::{config::DatabaseConfig, database::Database},
-        utils::join_path,
-    };
+    use crate::utils::join_path;
 
     use super::*;
 

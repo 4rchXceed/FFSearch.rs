@@ -1,3 +1,5 @@
+use std::{fs::File, io::Read};
+
 use extractous::{Extractor, PdfParserConfig, TesseractOcrConfig};
 
 /// The text extractor is a part of the file indexer component.
@@ -6,6 +8,7 @@ use extractous::{Extractor, PdfParserConfig, TesseractOcrConfig};
 pub struct TextExtractor {
     /// The extractor instance used to extract text from files.
     extractor: Extractor,
+    max_bytes: usize,
 }
 
 impl TextExtractor {
@@ -14,7 +17,7 @@ impl TextExtractor {
     /// - max_length: the maximum length in chars of the extracted text
     /// - enable_ocr: whether to enable OCR for the extractor
     /// - ocr_language: the language to use for OCR (if enabled)
-    pub fn new(max_length: usize, enable_ocr: bool, ocr_language: &str) -> Self {
+    pub fn new(max_length: usize, enable_ocr: bool, ocr_language: &str, max_bytes: usize) -> Self {
         if enable_ocr {
             Self {
                 extractor: Extractor::new()
@@ -24,10 +27,12 @@ impl TextExtractor {
                         PdfParserConfig::new()
                             .set_ocr_strategy(extractous::PdfOcrStrategy::OCR_ONLY),
                     ),
+                max_bytes: max_bytes,
             }
         } else {
             Self {
                 extractor: Extractor::new().set_extract_string_max_length(max_length as i32),
+                max_bytes: max_bytes,
             }
         }
     }
@@ -37,7 +42,30 @@ impl TextExtractor {
     /// Parameters:
     /// - path: the path to the file to extract text from
     pub fn extract(&self, path: String) -> Result<String, extractous::Error> {
-        let result = self.extractor.extract_file_to_string(path.as_str());
+        let file = File::open(path);
+        if file.is_err() {
+            return Err(extractous::Error::IoError(String::from("File not found")));
+        }
+        let mut file = file.unwrap();
+        let metadata = file.metadata();
+        if metadata.is_ok() {
+            if metadata.unwrap().len() > self.max_bytes as u64 {
+                return Err(extractous::Error::IoError(String::from("File too large")));
+            }
+        } else {
+            return Err(extractous::Error::IoError(String::from(
+                "Could not read file metadata",
+            )));
+        }
+        let mut content_bin = Vec::new();
+        file.read_to_end(&mut content_bin).unwrap();
+        let content = String::from_utf8(content_bin.clone());
+        if content.is_ok() {
+            return Ok(content.unwrap());
+        }
+        let result = self
+            .extractor
+            .extract_bytes_to_string(content_bin.as_slice());
         if result.is_ok() {
             let result = result.unwrap();
             return Ok(result.0);
@@ -56,7 +84,7 @@ mod tests {
     use super::*;
 
     fn setup(ocr: bool) -> (TextExtractor, TempDir, String) {
-        let extractor = TextExtractor::new(1024, ocr, "eng");
+        let extractor = TextExtractor::new(1024, ocr, "eng", 1024 * 1024); // 1MB
         let temp_dir = TempDir::new("test").unwrap();
         let file_path = temp_dir.path().to_string_lossy().into_owned();
         return (extractor, temp_dir, file_path);

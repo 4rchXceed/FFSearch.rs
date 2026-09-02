@@ -1,3 +1,5 @@
 /target
 .bin/
 diag.bat
+.tmp
+.zed

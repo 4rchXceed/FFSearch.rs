@@ -1,5 +1,5 @@
 [package]
-name = "P_Practice"
+name = "FFSearch"
 version = "0.1.0"
 edition = "2024"
 
@@ -10,3 +10,15 @@ tantivy = "0.26.1"
 tempdir = "0.3.7"
 uuid = {version="1.25.0", features=["v4"]}
 walkdir = "2.5.0"
+rig = "0.42.0"
+rig-core = "0.42.0"
+rig-lancedb = "0.42.0"
+lancedb = "0.30"
+tokio = { version = "1.53.1", features = ["full"] }
+serde_json = "1.0.151"
+tokio-stream = "0.1.19"
+# https://github.com/lancedb/lancedb/tree/main/rust/lancedb -> Tip
+lzma-sys = { version = "*", features = ["static"] }
+arrow-array = "58.4.0"
+tqdm = "0.8.0"
+thiserror = "2.0.20"

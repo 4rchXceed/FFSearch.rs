@@ -15,3 +15,8 @@
 + Added mmd diagrams (Mermaid diagrams, not MikuMikuDance XD). Via [auto_uml](https://github.com/EthanDGee/Auto-UML)
 ~ Changed the type of Document's content to Option<String>, so we can not load it when it's not needed
 ~ Bugfixed, performance improvements
+
+## Last commit: e787fe6c97ef594512b2d453bc6df65666fe095c
++ Added AI component
+~ Added error messages (via thiserror)
++ Added improvements on indection

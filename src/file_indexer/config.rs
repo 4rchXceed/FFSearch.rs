@@ -8,6 +8,7 @@ static DEFAULT_FILE_MAX_LENGTH: usize = 10_000;
 /// - one_file_max_length: the maximum length of a single file in (chars, I guess? See extractous's config)
 /// - enable_ocr: whether to enable OCR for the file indexer
 /// - ocr_lang: the language to use for OCR
+/// - max_file_size: the maximum size of a single file in bytes
 #[derive(Clone)]
 pub struct FileIndexerConfig {
     /// The maximum length of a single file in (chars, I guess? See extractous's config)
@@ -16,6 +17,8 @@ pub struct FileIndexerConfig {
     pub enable_ocr: bool,
     /// The language to use for OCR
     pub ocr_lang: String,
+    /// The maximum size of a single file in bytes
+    pub max_file_size: usize,
     /// The database's config
     pub db_config: DatabaseConfig,
 }
@@ -27,6 +30,7 @@ impl FileIndexerConfig {
             one_file_max_length: DEFAULT_FILE_MAX_LENGTH,
             enable_ocr: false,
             ocr_lang: String::new(),
+            max_file_size: 1024 * 1024 * 50, // 50MB
             db_config: DatabaseConfig::new(),
         }
     }

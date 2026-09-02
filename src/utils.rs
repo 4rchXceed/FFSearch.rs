@@ -67,8 +67,6 @@ pub fn trim_custom(string: String, trim_val: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use tempdir::TempDir;
-
     use super::*;
 
     #[test]
