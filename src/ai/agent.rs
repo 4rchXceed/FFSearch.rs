@@ -1,11 +1,14 @@
+use std::path::Path;
+
 use crate::{
     ai::{config::AgentConfig, rag::storage::RagStorage},
-    searcher::database::Database,
+    searcher::database::{Database, DatabaseError},
+    utils::join_path,
 };
 use rig::{
     agent::{MultiTurnStreamItem, StreamingError},
     client::{AgentClientExt, EmbeddingsClient},
-    embeddings::EmbeddingModel,
+    embeddings::{EmbedError, EmbeddingError, EmbeddingModel},
     message::Message,
     streaming::{StreamedAssistantContent, StreamingChat},
 };
@@ -18,27 +21,29 @@ use tokio_stream::StreamExt;
 pub enum AIError {
     #[error("Error while streaming response: {0}")]
     StreamError(StreamingError),
-    #[error("Failed to connect to the storage")]
-    ConnectToStorageError,
-    #[error("Failed to create index")]
-    CreateIndexError,
-    #[error("Failed to list table names")]
-    ListTableNamesError,
-    #[error("Failed to save the documents to the database")]
-    SetDocumentsFailed,
-    #[error("Failed to build the AI's database")]
-    BuildEmbeddingsFailed,
+    #[error("Failed to connect to the storage: {0}")]
+    ConnectToStorageError(lancedb::Error),
+    #[error("Failed to create index: {0}")]
+    CreateIndexError(lancedb::Error),
+    #[error("Failed to list table names: {0}")]
+    ListTableNamesError(lancedb::Error),
+    #[error("Failed to save the documents to the database: {0}")]
+    SetDocumentsFailed(EmbedError),
+    #[error("Failed to build the AI's database: {0}")]
+    BuildEmbeddingsFailed(EmbeddingError),
     #[error("Failed to build the RAG database")]
     FailedToBuildRagDbDatas,
-    #[error("Failed to get update the Index")]
-    GetIndexStatsError,
+    #[error("Failed to get update the Index: {0}")]
+    GetIndexStatsError(lancedb::Error),
     #[error("There's no document available")]
     FaildToGetNbrDimentions,
-    #[error("Failed to create DB table")]
-    CreateTableError,
+    #[error("Failed to create DB table: {0}")]
+    CreateTableError(lancedb::Error),
     #[error("Failed to open DB table")]
     OpenTableError,
-    #[error("Failed to {0}")]
+    #[error("Failed to get all the documents: {0}")]
+    FailedToGetAllDocuments(DatabaseError),
+    #[error("Other error: {0}")]
     Other(String),
 }
 
@@ -68,7 +73,37 @@ impl Agent {
     ///
     /// Returns:
     /// - A new Agent instance
-    pub async fn new<
+    pub async fn new_auto<
+        T: AgentClientExt + EmbeddingsClient + 'static,
+        Model: EmbeddingModel + Clone + Send + Sync + 'static,
+    >(
+        client: T,
+        config: AgentConfig,
+        db: &mut Database,
+        embedding_model: Model,
+    ) -> Result<Self, AIError> {
+        if Path::new(&join_path(&db.get_index_path(), "embeddings")).exists() {
+            return Self::new_load_storage(client, config, db, embedding_model).await;
+        } else {
+            return Self::new_create_storage(client, config, db, embedding_model).await;
+        }
+    }
+
+    pub async fn new_load_storage<
+        T: AgentClientExt + EmbeddingsClient + 'static,
+        Model: EmbeddingModel + Clone + Send + Sync + 'static,
+    >(
+        client: T,
+        config: AgentConfig,
+        db: &mut Database,
+        embedding_model: Model,
+    ) -> Result<Self, AIError> {
+        let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
+        rag_storage.load_index().await?;
+        return Self::new_from_rag(client, config, rag_storage);
+    }
+
+    pub async fn new_create_storage<
         T: AgentClientExt + EmbeddingsClient + 'static,
         Model: EmbeddingModel + Clone + Send + Sync + 'static,
     >(
@@ -79,7 +114,17 @@ impl Agent {
     ) -> Result<Self, AIError> {
         let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
         rag_storage.init_from_db(db).await?;
+        return Self::new_from_rag(client, config, rag_storage);
+    }
 
+    fn new_from_rag<
+        T: AgentClientExt + EmbeddingsClient + 'static,
+        Model: EmbeddingModel + Clone + Send + Sync + 'static,
+    >(
+        client: T,
+        config: AgentConfig,
+        storage: RagStorage<Model>,
+    ) -> Result<Self, AIError> {
         let mut agent = client.agent(config.model.clone());
         agent = match config.provider {
             super::config::AgentProvider::Ollama => agent.additional_params(json!({
@@ -88,7 +133,7 @@ impl Agent {
             _ => agent,
         }
         .preamble(&config.preamble)
-        .dynamic_context(config.rag_config.top_results, rag_storage);
+        .dynamic_context(config.rag_config.top_results, storage);
         let messages = Vec::new();
         let agent = agent.build();
         return Ok(Self {
@@ -128,7 +173,6 @@ impl Agent {
                     );
                 }
                 Err(e) => {
-                    // println!("{:?}", e);
                     return Err(AIError::StreamError(e));
                 }
             }

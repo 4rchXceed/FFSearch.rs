@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.45"
-extractous = "0.3.0"
 tantivy = "0.26.1"
 tempdir = "0.3.7"
 uuid = {version="1.25.0", features=["v4"]}
@@ -22,3 +21,13 @@ lzma-sys = { version = "*", features = ["static"] }
 arrow-array = "58.4.0"
 tqdm = "0.8.0"
 thiserror = "2.0.20"
+rmcp = { version = "3.2.0", features = ["server", "transport-streamable-http-server"] }
+hyper = "1.11.1"
+serde = "1.0.229"
+hyper-util = { version = "0.1.20", features = ["server", "service"] }
+xberg = { version="1.0.14", features=["pdf", "excel", "office", "hwp", "hwpx", "iwork", "email", "html", "xml", "archives", "mdx", "svg"] }
+wait = "0.2.6"
+bzip2 = { version = "*", features = ["static"] }
+
+# [patch.crates-io]
+# bzip2 = { git = "https://github.com/trifectatechfoundation/bzip2-rs.git", tag = "v0.5.2", default-features = false, features = ["libbz2-rs-sys"] }

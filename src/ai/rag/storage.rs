@@ -11,8 +11,8 @@ use rig::{
 use rig_lancedb::{LanceDBFilter, LanceDbVectorIndex, SearchParams};
 
 use crate::{
-    ai::agent::AIError, not_err_check, searcher::database::Database,
-    third_party::rig_utils::as_record_batch, utils::join_path,
+    ai::agent::AIError, searcher::database::Database, third_party::rig_utils::as_record_batch,
+    utils::join_path,
 };
 
 /// Represents a document for the RAG
@@ -56,8 +56,8 @@ where
     pub async fn new(index_path: String, model: Model) -> Result<Self, AIError> {
         let db = lancedb::connect(&join_path(&index_path, "embeddings"))
             .execute()
-            .await;
-        not_err_check!(db, db, Err(AIError::ConnectToStorageError));
+            .await
+            .map_err(|e| AIError::ConnectToStorageError(e))?;
 
         return Ok(Self {
             db: db,
@@ -97,7 +97,9 @@ where
     /// - Err(AIError) if an error occurred.
     pub async fn init_from_db(&mut self, db: &mut Database) -> Result<(), AIError> {
         // Get all the documents from the DB and split them into batches (See RAG_MAX_BATCH_SIZE).
-        let documents_raw = db.get_all(false);
+        let documents_raw = db
+            .get_all(false)
+            .map_err(|e| AIError::FailedToGetAllDocuments(e))?;
         let mut documents = Vec::new();
         for doc in documents_raw {
             if doc.content.is_some() {
@@ -118,15 +120,17 @@ where
         }
 
         // Build the embeddings from the documents using the embedding model.
-        let builder = EmbeddingsBuilder::new(self.model.clone()).documents(documents);
-        not_err_check!(builder, builder, Err(AIError::SetDocumentsFailed));
+        let builder = EmbeddingsBuilder::new(self.model.clone())
+            .documents(documents)
+            .map_err(|e| AIError::SetDocumentsFailed(e))?;
 
-        let builder = builder.build().await;
-        not_err_check!(embeddings, builder, Err(AIError::BuildEmbeddingsFailed));
+        let embeddings = builder
+            .build()
+            .await
+            .map_err(|e| AIError::BuildEmbeddingsFailed(e))?;
 
         // Save the embeddings to the database, and load the index.
-        let index = self.generate_index(embeddings).await;
-        not_err_check!(index, index, Err(index.err().unwrap()));
+        let index = self.generate_index(embeddings).await?;
 
         self.index = Some(index);
 
@@ -142,28 +146,26 @@ where
         &mut self,
         documents: Vec<(EmbedDocument, Vec<Embedding>)>,
     ) -> Result<LanceDbVectorIndex<Model>, AIError> {
-        let table_names = self.db.table_names().execute().await;
-        not_err_check!(table_names, table_names, Err(AIError::ListTableNamesError));
+        let table_names = self
+            .db
+            .table_names()
+            .execute()
+            .await
+            .map_err(|e| AIError::ListTableNamesError(e))?;
 
-        let table;
-        if !table_names.contains(&String::from("files")) {
-            let table_op = self.ensure_table(documents).await;
-            if table_op.is_err() {
-                return Err(table_op.err().unwrap());
-            }
-            table = table_op.unwrap();
-        } else {
-            let table_op = self.db.open_table("files").execute().await;
+        if table_names.contains(&String::from("files")) {
+            let table_op = self.db.drop_table("files", &[]).await;
             if table_op.is_err() {
                 return Err(AIError::OpenTableError);
             }
-            table = table_op.unwrap();
         }
 
+        let table = self.ensure_table(documents).await?;
+
         let search_params = SearchParams::default();
-        let vector_index =
-            LanceDbVectorIndex::new(table, self.model.clone(), "id", search_params).await;
-        not_err_check!(vector_index, vector_index, Err(AIError::CreateIndexError));
+        let vector_index = LanceDbVectorIndex::new(table, self.model.clone(), "id", search_params)
+            .await
+            .map_err(|e| AIError::CreateIndexError(e))?;
 
         return Ok(vector_index);
     }
@@ -198,26 +200,28 @@ where
             .db
             .create_table("files", vec![record_batch])
             .execute()
-            .await;
-        not_err_check!(table, table, Err(AIError::CreateTableError));
+            .await
+            .map_err(|e| AIError::CreateTableError(e))?;
 
         // https://github.com/0xPlaygrounds/rig/blob/475cfddc28cc5b367108a3d387b84d5f838d613b/crates/rig-lancedb/examples/vector_search_local_ann_agent.rs#L59
         let row_count = table.count_rows(None).await.unwrap_or(0);
 
         // Else it's not worth creating an index
         if row_count >= 256 {
-            let index_stats = table.index_stats("embedding").await;
-            not_err_check!(index_stats, index_stats, Err(AIError::GetIndexStatsError));
+            let index_stats = table
+                .index_stats("embedding")
+                .await
+                .map_err(|e| AIError::GetIndexStatsError(e))?;
 
             if index_stats.is_none() {
-                let res = table
+                table
                     .create_index(
                         &["embedding"],
                         lancedb::index::Index::IvfPq(IvfPqIndexBuilder::default()),
                     )
                     .execute()
-                    .await;
-                not_err_check!(res, res, Err(AIError::CreateIndexError));
+                    .await
+                    .map_err(|e| AIError::CreateIndexError(e))?;
             }
         }
         return Ok(table);

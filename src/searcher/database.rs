@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::mpsc::RecvError};
 
 use tantivy::{
     DateTime, DocAddress, Index, IndexReader, IndexWriter, TantivyDocument, TantivyError, Term,
@@ -12,7 +12,7 @@ use tantivy::{
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{not_err_check, not_null_check, searcher::config::DatabaseConfig, utils::join_path};
+use crate::{searcher::config::DatabaseConfig, utils::join_path};
 
 /// Max limit for search results, used because we need to.
 static MAX_LIMIT: usize = 9_999_999;
@@ -78,6 +78,12 @@ pub enum DatabaseError {
     ShouldNotHappenError,
     #[error("Could not open index: {0}")]
     CouldNotOpenIndexError(TantivyError),
+    #[error("Could not parse the query: {0}, error: {1}")]
+    CouldNotParseQuery(String, String),
+    #[error("Wanted {0} but received {0} (thread communication)")]
+    WantedThreadObjectReceivedOtherType(String, String),
+    #[error("Thread recv error")]
+    NoThreadRecv,
 }
 
 /// The database is the main search engine of the program.
@@ -117,8 +123,8 @@ impl Database {
         let index: Index;
         let schema: Schema;
         if !Path::new(&index_path).exists() {
-            let res = std::fs::create_dir_all(&index_path);
-            not_err_check!(res, res, Err(DatabaseError::CouldNotCreateDirError));
+            std::fs::create_dir_all(&index_path)
+                .map_err(|_| DatabaseError::CouldNotCreateDirError)?;
 
             schema = Self::build_schema();
 
@@ -140,40 +146,23 @@ impl Database {
         }
 
         // Create the index writer
-        let index_writer = index.writer(config.max_db_size);
-        not_err_check!(
-            index_writer,
-            index_writer,
-            Err(DatabaseError::IndexWriterCreationError(
-                index_writer.err().unwrap(),
-            ))
-        );
+        let index_writer = index
+            .writer(config.max_db_size)
+            .map_err(|e| DatabaseError::IndexWriterCreationError(e))?;
 
         // Get the path and content fields
-        let path_field = schema.get_field("path");
-        not_err_check!(
-            path_field,
-            path_field,
-            Err(DatabaseError::ShouldNotHappenError)
-        );
-        let content_field = schema.get_field("content");
-        not_err_check!(
-            content_field,
-            content_field,
-            Err(DatabaseError::ShouldNotHappenError)
-        );
-        let uuid_field = schema.get_field("uuid");
-        not_err_check!(
-            uuid_field,
-            uuid_field,
-            Err(DatabaseError::ShouldNotHappenError)
-        );
-        let mod_date_field = schema.get_field("moddate");
-        not_err_check!(
-            mod_date_field,
-            mod_date_field,
-            Err(DatabaseError::ShouldNotHappenError)
-        );
+        let path_field = schema
+            .get_field("path")
+            .map_err(|_| DatabaseError::ShouldNotHappenError)?;
+        let content_field = schema
+            .get_field("content")
+            .map_err(|_| DatabaseError::ShouldNotHappenError)?;
+        let uuid_field = schema
+            .get_field("uuid")
+            .map_err(|_| DatabaseError::ShouldNotHappenError)?;
+        let mod_date_field = schema
+            .get_field("moddate")
+            .map_err(|_| DatabaseError::ShouldNotHappenError)?;
 
         // Return the database
         return Ok(Self {
@@ -202,14 +191,8 @@ impl Database {
             .index
             .reader_builder()
             // .reload_policy(ReloadPolicy::OnCommitWithDelay)
-            .try_into();
-        not_err_check!(
-            reader,
-            reader,
-            Err(DatabaseError::CouldNotCreateReaderError(
-                reader.err().unwrap()
-            ))
-        );
+            .try_into()
+            .map_err(|e| DatabaseError::CouldNotCreateReaderError(e))?;
         return Ok(reader);
     }
 
@@ -262,9 +245,7 @@ impl Database {
         doc.add_text(self.content_field, content);
         doc.add_text(self.uuid_field, uuid.clone());
         doc.add_date(self.mod_date_field, DateTime::from_timestamp_secs(mod_date));
-        let res = self.index_writer.add_document(doc);
-        not_err_check!(res, res, Err(res.err().unwrap()));
-        self.index_writer.commit()?;
+        self.index_writer.add_document(doc)?;
         return Ok(uuid);
     }
 
@@ -274,26 +255,27 @@ impl Database {
     /// - limit: the maximum number of results to return
     /// Returns:
     /// - Vec<Document>: a vector of documents that match the query
-    pub fn search(&self, query: String, limit: usize) -> Vec<Document> {
-        let reader = self.get_reader();
-        not_err_check!(reader, reader, Vec::new());
+    pub fn search(&self, query: String, limit: usize) -> Result<Vec<Document>, DatabaseError> {
+        let reader = self.get_reader()?;
 
         let searcher = reader.searcher();
         let query_parser =
             QueryParser::for_index(&self.index, vec![self.path_field, self.content_field]);
 
-        let query = query_parser.parse_query(query.as_str());
-        not_err_check!(query, query, Vec::new());
+        let query = query_parser
+            .parse_query(query.as_str())
+            .map_err(|e| DatabaseError::CouldNotParseQuery(query, e.to_string()))?;
 
-        let top_docs = searcher.search(&query, &TopDocs::with_limit(limit).order_by_score());
-        not_err_check!(top_docs, top_docs, Vec::new());
+        let top_docs = searcher
+            .search(&query, &TopDocs::with_limit(limit).order_by_score())
+            .map_err(|e| DatabaseError::SearchFailed(e))?;
 
-        return top_docs
+        return Ok(top_docs
             .iter()
             .map(|(_, addr)| self.document_from_tantivy_doc(*addr, true))
             .filter(|d| d.is_some())
             .map(|d| d.unwrap())
-            .collect();
+            .collect());
     }
 
     /// Utility function to convert a Tantivy document to a Document
@@ -302,28 +284,22 @@ impl Database {
     /// Returns:
     /// - Option<Document>: the converted document, or None if the conversion failed
     fn document_from_tantivy_doc(&self, doc: DocAddress, optimized: bool) -> Option<Document> {
-        let reader = self.get_reader();
-        not_err_check!(reader, reader, None);
+        let reader = self.get_reader().ok()?;
 
-        let doc: Result<TantivyDocument, _> = reader.searcher().doc(doc);
-        not_err_check!(doc, doc, None);
+        let doc: TantivyDocument = reader.searcher().doc(doc).ok()?;
 
-        not_null_check!(path, doc.get_first(self.path_field), None);
-        let path = path.as_str();
-        not_null_check!(path, path, None);
+        let path = doc.get_first(self.path_field)?;
+        let path = path.as_str()?;
 
-        not_null_check!(uuid, doc.get_first(self.uuid_field), None);
-        let uuid = uuid.as_str();
-        not_null_check!(uuid, uuid, None);
+        let uuid = doc.get_first(self.uuid_field)?;
+        let uuid = uuid.as_str()?;
 
-        not_null_check!(mod_date, doc.get_first(self.mod_date_field), None);
-        let mod_date = mod_date.as_datetime();
-        not_null_check!(mod_date, mod_date, None);
+        let mod_date = doc.get_first(self.mod_date_field)?;
+        let mod_date = mod_date.as_datetime()?;
 
         if !optimized {
-            not_null_check!(content, doc.get_first(self.content_field), None);
-            let content = content.as_str();
-            not_null_check!(content, content, None);
+            let content = doc.get_first(self.content_field)?;
+            let content = content.as_str()?;
 
             return Some(Document::new(
                 String::from(path),
@@ -347,26 +323,15 @@ impl Database {
     /// Returns:
     /// - Result<(), ()>: Ok(()) if the document was removed, Err(()) if the document was not found
     pub fn remove_document(&mut self, path: String) -> Result<String, DatabaseError> {
-        let document = self.get(path.clone());
-        not_err_check!(document, document, Err(document.err().unwrap()));
+        let document = self.get(path.clone())?;
         let term_query = TermQuery::new(
             Term::from_field_text(self.uuid_field, &document.uuid),
             IndexRecordOption::Basic,
         );
 
-        let res = self.index_writer.delete_query(term_query.box_clone());
-        not_err_check!(
-            res,
-            res,
-            Err(DatabaseError::FailedToRemoveDocument(res.err().unwrap()))
-        );
-
-        let res = self.index_writer.commit();
-        not_err_check!(
-            res,
-            res,
-            Err(DatabaseError::IndexCommitError(res.err().unwrap()))
-        );
+        self.index_writer
+            .delete_query(term_query.box_clone())
+            .map_err(|e| DatabaseError::FailedToRemoveDocument(e))?;
 
         return Ok(document.uuid);
     }
@@ -382,15 +347,19 @@ impl Database {
         new_content: String,
         mod_date: i64,
     ) -> Result<(), DatabaseError> {
-        let old_doc_uuid = self.remove_document(path.clone());
-        not_err_check!(old_doc_uuid, old_doc_uuid, Err(old_doc_uuid.err().unwrap()));
-        let res = self.add_document_internal(path, new_content, mod_date, old_doc_uuid);
-        not_err_check!(
-            res,
-            res,
-            Err(DatabaseError::FailedToAddDocument(res.err().unwrap()))
-        );
+        let old_doc_uuid = self.remove_document(path.clone())?;
+        self.add_document_internal(path, new_content, mod_date, old_doc_uuid)
+            .map_err(|e| DatabaseError::FailedToAddDocument(e))?;
 
+        return Ok(());
+    }
+
+    /// Commits the changes to the database
+    /// I did it like this, so it's MUUUUCH faster
+    pub fn commit(&mut self) -> Result<(), DatabaseError> {
+        self.index_writer
+            .commit()
+            .map_err(|e| DatabaseError::IndexCommitError(e))?;
         return Ok(());
     }
 
@@ -400,19 +369,14 @@ impl Database {
     /// Returns:
     /// - Option<Document>: the document if it exists, None if it doesn't
     pub fn get(&self, path: String) -> Result<Document, DatabaseError> {
-        let reader = self.get_reader();
-        not_err_check!(reader, reader, Err(reader.err().unwrap()));
+        let reader = self.get_reader()?;
 
         let searcher = reader.searcher();
         let term = Term::from_field_text(self.path_field, path.as_str());
         let term_query = TermQuery::new(term, IndexRecordOption::Basic);
-        let top_docs = searcher.search(&term_query, &TopDocs::with_limit(1).order_by_score());
-
-        not_err_check!(
-            top_docs,
-            top_docs,
-            Err(DatabaseError::SearchFailed(top_docs.err().unwrap()))
-        );
+        let top_docs = searcher
+            .search(&term_query, &TopDocs::with_limit(1).order_by_score())
+            .map_err(|e| DatabaseError::SearchFailed(e))?;
 
         let the_only_doc = top_docs
             .iter()
@@ -438,33 +402,28 @@ impl Database {
     /// Get all Database's documents
     /// Returns:
     /// - Vec<Document>: all the documents WITHOUT THEIR CONENT
-    pub fn get_all(&self, optimized: bool) -> Vec<Document> {
-        let reader = self.get_reader();
-        not_err_check!(reader, reader, Vec::new());
+    pub fn get_all(&self, optimized: bool) -> Result<Vec<Document>, DatabaseError> {
+        let reader = self.get_reader()?;
 
         let searcher = reader.searcher();
         let all_query = AllQuery {};
 
-        let top_docs =
-            searcher.search(&all_query, &TopDocs::with_limit(MAX_LIMIT).order_by_score());
+        let top_docs = searcher
+            .search(&all_query, &TopDocs::with_limit(MAX_LIMIT).order_by_score())
+            .map_err(|e| DatabaseError::SearchFailed(e))?;
 
-        not_err_check!(top_docs, top_docs, Vec::new());
-
-        return top_docs
+        return Ok(top_docs
             .iter()
             .map(|(_, addr)| self.document_from_tantivy_doc(*addr, optimized))
             .filter(|doc| doc.is_some())
             .map(|doc| doc.unwrap())
-            .collect();
+            .collect());
     }
 
     pub fn close(self) -> Result<(), DatabaseError> {
-        let res = self.index_writer.wait_merging_threads();
-        not_err_check!(
-            res,
-            res,
-            Err(DatabaseError::IndexCloseError(res.err().unwrap()))
-        );
+        self.index_writer
+            .wait_merging_threads()
+            .map_err(|e| DatabaseError::IndexCloseError(e))?;
         Ok(())
     }
 }
@@ -477,8 +436,6 @@ mod tests {
     //     fs::{File, create_dir},
     //     io::Write,
     // };
-
-    use crate::searcher::database;
 
     use super::*;
     use chrono;
@@ -535,6 +492,7 @@ mod tests {
             )
             .is_ok()
         );
+        db.commit().unwrap();
         return (db, temp_dir);
     }
 
@@ -568,6 +526,8 @@ mod tests {
 
         let _ = database.remove_document(String::from("file1.txt"));
 
+        database.commit().unwrap();
+
         let doc2 = database.get(String::from("file1.txt"));
         assert!(doc2.is_err());
         let _ = temp_dir.close();
@@ -577,15 +537,15 @@ mod tests {
     #[test]
     fn test_search() {
         let (database, temp_dir) = setup();
-        let results = database.search(String::from("catgirls"), 10);
+        let results = database.search(String::from("catgirls"), 10).unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, String::from("file1.txt"));
         assert_eq!(results[0].content, None);
 
-        let no_results = database.search(String::from("NOO"), 10);
+        let no_results = database.search(String::from("NOO"), 10).unwrap();
         assert_eq!(no_results.len(), 0);
 
-        let results2 = database.search(String::from("YAY"), 10);
+        let results2 = database.search(String::from("YAY"), 10).unwrap();
         assert_eq!(results2.len(), 2);
         let _ = temp_dir.close();
     }
@@ -595,7 +555,7 @@ mod tests {
     fn test_all() {
         let (database, temp_dir) = setup();
 
-        let results = database.get_all(true);
+        let results = database.get_all(true).unwrap();
 
         assert_eq!(results.len(), 2);
 
@@ -615,6 +575,7 @@ mod tests {
             String::from(SECOND_FILE_CONTENT),
             0,
         );
+        database.commit().unwrap();
         let temp_dir_path = temp_dir.path().to_str().unwrap().to_string();
         assert!(database.close().is_ok());
         let database2 = Database::new(String::from(temp_dir_path), DatabaseConfig::new());

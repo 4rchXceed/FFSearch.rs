@@ -1,22 +1,12 @@
 use crate::searcher::config::DatabaseConfig;
 
-/// The default maximum length of a single file in chars.
-static DEFAULT_FILE_MAX_LENGTH: usize = 10_000;
-
 /// The configuration for the file indexer.
 /// These are the config properties for the file indexer:
-/// - one_file_max_length: the maximum length of a single file in (chars, I guess? See extractous's config)
-/// - enable_ocr: whether to enable OCR for the file indexer
-/// - ocr_lang: the language to use for OCR
 /// - max_file_size: the maximum size of a single file in bytes
 #[derive(Clone)]
 pub struct FileIndexerConfig {
-    /// The maximum length of a single file in (chars, I guess? See extractous's config)
-    pub one_file_max_length: usize,
-    /// Whether to enable OCR for the file indexer
-    pub enable_ocr: bool,
-    /// The language to use for OCR
-    pub ocr_lang: String,
+    /// The number of threads to use for indexing files
+    pub number_of_threads: usize,
     /// The maximum size of a single file in bytes
     pub max_file_size: usize,
     /// The database's config
@@ -27,10 +17,8 @@ impl FileIndexerConfig {
     /// Creates a new file indexer config with default values.
     pub fn new() -> Self {
         Self {
-            one_file_max_length: DEFAULT_FILE_MAX_LENGTH,
-            enable_ocr: false,
-            ocr_lang: String::new(),
-            max_file_size: 1024 * 1024 * 50, // 50MB
+            number_of_threads: 6,
+            max_file_size: 1024 * 1024, // 1MB, large files are VERY slow to index
             db_config: DatabaseConfig::new(),
         }
     }

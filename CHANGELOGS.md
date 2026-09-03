@@ -20,3 +20,10 @@
 + Added AI component
 ~ Added error messages (via thiserror)
 + Added improvements on indection
+
+## Last commit: 7eed571d4bb0dbedb3b9ffeae14e98dd716148ad~
+- Switched from not_null_check & not_err_check macros to ".?" operator
++ Added MCP server + test (thread-safe)
++ Added multithreading for indexion
+~ Switched from extractous to xberg
+~ Changed a bunch of other stuff/performance improvements

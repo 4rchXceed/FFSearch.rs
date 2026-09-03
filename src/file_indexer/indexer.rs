@@ -3,10 +3,11 @@ use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
 use tantivy::DateTime;
 use thiserror::Error;
 use tqdm::tqdm;
+use wait::Waitable;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::{
-    file_indexer::{config::FileIndexerConfig, text_extractor::TextExtractor},
+    file_indexer::{config::FileIndexerConfig, text_extractor::extract},
     searcher::database::{Database, DatabaseError, Document},
     utils::{same_path, trim_custom},
 };
@@ -28,6 +29,24 @@ pub enum FileIndexerError {
     FailedToRemoveDocument(DatabaseError),
     #[error("The database failed to init: {0}")]
     DatabaseInitError(DatabaseError),
+    #[error("Failed to get all the documents from the DB: {0}")]
+    GetAllDocumentsFailed(DatabaseError),
+    #[error(
+        "Thread panicked during file indexing, this is likely a bug in the code. You can check the logs."
+    )]
+    ThreadError,
+    #[error("Failed to get file content: {0}")]
+    GetFileContentError(String),
+    #[error("Failed to commit changes to the database: {0}")]
+    DatabaseCommitError(DatabaseError),
+}
+
+/// Represents the type of operation needed for a file during indexing.
+#[derive(Clone)]
+pub enum FileOperationNeeded {
+    Add,
+    Update,
+    None,
 }
 
 /// This is the file indexer, responsible for indexing files in a given folder to the database.
@@ -36,8 +55,6 @@ pub struct FileIndexer {
     folder: String,
     /// The database to store the index in.
     db: Database,
-    /// The text extractor to use for extracting file content.
-    extractor: TextExtractor,
     /// The configuration for the file indexer.
     config: FileIndexerConfig,
 }
@@ -55,12 +72,6 @@ impl FileIndexer {
         return Ok(Self {
             folder: folder,
             db: database,
-            extractor: TextExtractor::new(
-                config.one_file_max_length,
-                config.enable_ocr,
-                &config.ocr_lang,
-                config.max_file_size,
-            ),
             config: config,
         });
     }
@@ -91,8 +102,11 @@ impl FileIndexer {
 
     /// Syncs the files in the folder to the database.
     /// Returns: a vector of any errors that occurred during syncing.
-    pub fn sync(&mut self) -> Vec<FileIndexerError> {
-        let all = self.db.get_all(true);
+    pub fn sync(&mut self) -> Result<Vec<FileIndexerError>, FileIndexerError> {
+        let all = self
+            .db
+            .get_all(true)
+            .map_err(|e| FileIndexerError::GetAllDocumentsFailed(e))?;
 
         let files: Vec<PathBuf> = WalkDir::new(self.folder.clone())
             .into_iter()
@@ -112,14 +126,101 @@ impl FileIndexer {
             .collect();
 
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
-        for file in tqdm(&files) {
-            // println!(
-            //     "Indexing: {}",
-            //     file.extension().unwrap_or_default().to_string_lossy()
-            // );
+        let mut all_files_to_process = Vec::new();
+        let number_of_threads = self.config.number_of_threads;
+        for file in files.iter() {
             let result = self.index_one_file(file, &all);
             if result.is_err() {
                 all_errors.push(result.err().unwrap());
+            } else {
+                let result = result.unwrap();
+                match result {
+                    FileOperationNeeded::None => {}
+                    _ => all_files_to_process.push((file.clone(), result)),
+                }
+            }
+        }
+        let mut threads = Vec::new();
+        let max_file_size = self.config.max_file_size;
+        for th in 0..number_of_threads {
+            let thread_process_files = all_files_to_process
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| i % number_of_threads == th)
+                .map(|(_, d)| (d.0.clone(), d.1.clone()))
+                .collect::<Vec<(PathBuf, FileOperationNeeded)>>()
+                .clone();
+            threads.push(tokio::spawn(async move {
+                let mut results = Vec::new();
+                for (file, operation) in
+                    tqdm(thread_process_files).desc(Some(format!("Thread: {}", th)))
+                {
+                    results.push((
+                        file.clone(),
+                        operation,
+                        extract(file.to_string_lossy().to_string(), max_file_size).await,
+                    ));
+                }
+                return results;
+            }));
+        }
+
+        for thread in threads {
+            let results = thread.wait();
+            if results.is_ok() {
+                let results = results.unwrap();
+                for (file, operation, result) in results {
+                    if result.is_ok() {
+                        let content = result.unwrap();
+                        let file_path = file.to_string_lossy().to_string();
+                        let local_file_path = self.to_local_path(file_path.clone());
+                        if local_file_path.is_ok() {
+                            let local_file_path = local_file_path.unwrap();
+                            let timestamp = self.extract_mod_date(&file);
+                            if timestamp.is_ok() {
+                                let timestamp = timestamp.unwrap();
+                                match operation {
+                                    FileOperationNeeded::Add => {
+                                        let result = self.db.add_document(
+                                            local_file_path,
+                                            content,
+                                            timestamp,
+                                        );
+                                        if result.is_err() {
+                                            all_errors.push(FileIndexerError::CouldNotAddDocument(
+                                                result.err().unwrap(),
+                                            ));
+                                        }
+                                    }
+                                    FileOperationNeeded::Update => {
+                                        let result = self.db.update_document(
+                                            local_file_path,
+                                            content,
+                                            timestamp,
+                                        );
+                                        if result.is_err() {
+                                            all_errors.push(
+                                                FileIndexerError::CouldNotUpdateDocument(
+                                                    result.err().unwrap(),
+                                                ),
+                                            );
+                                        }
+                                    }
+                                    FileOperationNeeded::None => {}
+                                };
+                            } else {
+                                all_errors.push(timestamp.err().unwrap());
+                            }
+                        } else {
+                            all_errors.push(local_file_path.err().unwrap());
+                        }
+                    } else {
+                        all_errors
+                            .push(FileIndexerError::GetFileContentError(result.err().unwrap()));
+                    }
+                }
+            } else {
+                all_errors.push(FileIndexerError::ThreadError);
             }
         }
 
@@ -139,7 +240,11 @@ impl FileIndexer {
             }
         }
 
-        return all_errors;
+        self.db
+            .commit()
+            .map_err(|e| FileIndexerError::DatabaseCommitError(e))?;
+
+        return Ok(all_errors);
     }
 
     /// Converts a file path (absolute/relative) to a local file path (relative to the folder being indexed).
@@ -165,7 +270,7 @@ impl FileIndexer {
         &mut self,
         file: &PathBuf,
         db_files: &Vec<Document>,
-    ) -> Result<(), FileIndexerError> {
+    ) -> Result<FileOperationNeeded, FileIndexerError> {
         let timestamp = self.extract_mod_date(&file);
         if timestamp.is_ok() {
             let timestamp = timestamp.unwrap();
@@ -177,30 +282,12 @@ impl FileIndexer {
                 .find(|h| same_path((**h).path.as_str(), local_file_path.as_str()));
             // Case: the file is not in the database, add it
             if same.is_none() {
-                let content = self.extractor.extract(file_path.clone());
-                if content.is_ok() {
-                    let content = content.unwrap();
-
-                    let res = self
-                        .db
-                        .add_document(local_file_path.clone(), content, timestamp);
-                    if res.is_err() {
-                        return Err(FileIndexerError::CouldNotAddDocument(res.err().unwrap()));
-                    }
-                }
+                return Ok(FileOperationNeeded::Add);
             // Case: the file is in the database but the modification date has changed, update it
             } else if same.unwrap().modification_date != DateTime::from_timestamp_secs(timestamp) {
-                let content = self.extractor.extract(file_path.clone());
-                if content.is_ok() {
-                    let content = content.unwrap();
-
-                    let res = self.db.update_document(local_file_path, content, timestamp);
-                    if res.is_err() {
-                        return Err(FileIndexerError::CouldNotUpdateDocument(res.err().unwrap()));
-                    }
-                }
+                return Ok(FileOperationNeeded::Update);
             }
-            return Ok(());
+            return Ok(FileOperationNeeded::None);
         } else {
             return Err(timestamp.err().unwrap());
         }
@@ -256,10 +343,14 @@ impl FileIndexer {
         }
     }
 
-    /// [Tests only] Gets the database.
     /// Returns: a mutable reference to the database.
     pub fn get_db(&mut self) -> &mut Database {
         return &mut self.db;
+    }
+
+    /// Returns: a reference to the database.
+    pub fn get_db_ro(&self) -> &Database {
+        return &self.db;
     }
 }
 
@@ -322,11 +413,11 @@ mod tests {
         return (file_indexer.unwrap(), temp_dir, folder);
     }
 
-    #[test]
-    fn test_sync_one() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_sync_one() {
         let (mut indexer, tempdir, folder_path) = setup();
         generate_test_datas(folder_path.as_str());
-        let errors = indexer.sync();
+        let errors = indexer.sync().unwrap();
         assert!(errors.is_empty());
 
         let db = indexer.get_db();
@@ -337,12 +428,10 @@ mod tests {
 
         assert!(file1.is_ok());
 
-        let mut first_content = String::from(FIRST_FILE_CONTENT);
-        first_content.push('\n');
+        let first_content = String::from(FIRST_FILE_CONTENT);
         assert_eq!(file1.unwrap().content.unwrap(), first_content);
 
-        let mut second_content = String::from(SECOND_FILE_CONTENT);
-        second_content.push('\n');
+        let second_content = String::from(SECOND_FILE_CONTENT);
         assert_eq!(file2.unwrap().content.unwrap(), second_content);
 
         assert!(match file3.err().unwrap() {
@@ -353,11 +442,11 @@ mod tests {
         let _ = tempdir.close();
     }
 
-    #[test]
-    fn test_sync_two() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_sync_two() {
         let (mut indexer, tempdir, folder_path) = setup();
         generate_test_datas(folder_path.as_str());
-        let errors = indexer.sync();
+        let errors = indexer.sync().unwrap();
         assert!(errors.is_empty());
 
         sleep(Duration::from_secs(2)); // If the files are updated too quickly, the sync may not detect the change
@@ -366,28 +455,26 @@ mod tests {
         assert!(path.is_ok());
         write_to_file(path.unwrap(), THIRD_FILE_CONTENT);
 
-        let errors = indexer.sync();
+        let errors = indexer.sync().unwrap();
         assert!(errors.is_empty());
 
         let db = indexer.get_db();
 
         let file1 = db.get(String::from("file1.txt"));
         assert!(file1.is_ok());
-        let mut first_content = String::from(FIRST_FILE_CONTENT);
-        first_content.push('\n');
+        let first_content = String::from(FIRST_FILE_CONTENT);
         assert_eq!(file1.unwrap().content.unwrap(), first_content);
 
         let file3 = db.get(String::from("file2.txt"));
         assert!(file3.is_ok());
-        let mut third_content = String::from(THIRD_FILE_CONTENT);
-        third_content.push('\n');
+        let third_content = String::from(THIRD_FILE_CONTENT);
         assert_eq!(file3.unwrap().content.unwrap(), third_content);
 
         let _ = tempdir.close();
     }
 
-    #[test]
-    fn test_relative_path() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_relative_path() {
         let folder = String::from("/tmp/ffsearch-test");
         if !Path::new(&folder).exists() {
             let _ = create_dir(folder.clone());
@@ -397,22 +484,22 @@ mod tests {
         }
 
         let mut file_indexer = FileIndexer::new(folder.clone(), FileIndexerConfig::new()).unwrap();
-        assert!(file_indexer.sync().is_empty());
+        assert!(file_indexer.sync().unwrap().is_empty());
         generate_test_datas(folder.as_str());
-        assert!(file_indexer.sync().is_empty());
+        assert!(file_indexer.sync().unwrap().is_empty());
     }
 
-    #[test]
-    fn test_sync_three() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    async fn test_sync_three() {
         let (mut indexer, tempdir, folder_path) = setup();
         generate_test_datas(folder_path.as_str());
-        indexer.sync();
+        indexer.sync().unwrap();
 
         let path = OsString::from_str(join_path(folder_path.as_str(), "file1.txt").as_str());
         assert!(path.is_ok());
         let _ = remove_file(path.unwrap());
 
-        indexer.sync();
+        indexer.sync().unwrap();
 
         let db = indexer.get_db();
 
