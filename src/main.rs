@@ -1,28 +1,47 @@
-use std::{collections::HashMap, io::Write, process::ExitCode, sync::Arc};
-
+#[cfg(feature = "ai")]
 use rig::client::{EmbeddingsClient, Nothing};
 use tokio::sync::RwLock;
 
-use crate::{
-    ai::{
-        agent::Agent,
-        config::{AgentConfig, AgentProvider},
-        rag::config::RagConfig,
-    },
-    file_indexer::{config::FileIndexerConfig, indexer::FileIndexer},
-    mcp::{
-        config::McpServerConfig,
-        server::{McpInstancesContext, McpServer},
-    },
+#[cfg(feature = "ai")]
+use std::io::Write;
+#[cfg(feature = "ai")]
+use std::process::ExitCode;
+use std::{collections::HashMap, io::Write, sync::Arc};
+#[cfg(feature = "mcp")]
+use std::{collections::HashMap, sync::Arc};
+#[cfg(feature = "mcp")]
+use tokio::sync::RwLock;
+
+#[cfg(feature = "ai")]
+use crate::ai::{
+    agent::Agent,
+    config::{AgentConfig, AgentProvider},
+    rag::config::RagConfig,
 };
 
+#[cfg(feature = "mcp")]
+use crate::mcp::{
+    config::McpServerConfig,
+    server::{McpInstancesContext, McpServer},
+};
+
+use crate::{
+    daemon::manager::DaemonManager,
+    file_indexer::{config::FileIndexerConfig, indexer::FileIndexer},
+};
+
+#[cfg(feature = "ai")]
 mod ai;
+#[cfg(feature = "daemon")]
+mod daemon;
 mod file_indexer;
+#[cfg(feature = "mcp")]
 mod mcp;
 mod searcher;
 mod third_party;
 mod utils;
 
+#[cfg(feature = "ai")]
 async fn test_ai() -> Option<ExitCode> {
     let mut indexer = FileIndexer::new(
         String::from("E:\\Tronc_commun\\TC_24\\M117\\S_Scripts"),
@@ -74,6 +93,7 @@ async fn test_ai() -> Option<ExitCode> {
     return None;
 }
 
+#[cfg(feature = "mcp")]
 async fn test_mcpserver() -> Result<(), String> {
     let mut folders = HashMap::new();
     let mut fserver1 = FileIndexer::new(String::from("src"), FileIndexerConfig::new())
@@ -100,6 +120,74 @@ async fn test_mcpserver() -> Result<(), String> {
     return Ok(());
 }
 
+#[cfg(feature = "daemon")]
+async fn daemon() {
+    let mut folders = HashMap::new();
+    let mut config = FileIndexerConfig::new();
+    config.number_of_threads = 16;
+    loop {
+        let mut command = String::new();
+        print!(">");
+        std::io::stdout().flush().expect("Failed to flush");
+        std::io::stdin()
+            .read_line(&mut command)
+            .expect("Failed to read line");
+        let command = command.trim();
+        let parts = command.split(" ").collect::<Vec<&str>>();
+        let mut daemon_manager = DaemonManager::new().expect("Failed to create daemon manager");
+        daemon_manager.start();
+        if let Some(action) = parts.first() {
+            if *action == "/add" {
+                if let Some(path) = parts.get(1) {
+                    let file_indexer = FileIndexer::new(path.to_string(), config.clone())
+                        .expect("Failed to create file indexer");
+                    let arc = Arc::new(RwLock::new(file_indexer));
+                    let id = folders.len().to_string();
+                    println!("ID: {}", id);
+                    folders.insert(id, arc.clone());
+                    daemon_manager.add_folder(path.to_string(), arc).await;
+                }
+            } else if *action == "/rm" {
+                if let Some(path) = parts.get(1) {
+                    daemon_manager.remove_folder(path.to_string()).await;
+                }
+            } else if *action == "/search" {
+                if let Some(id) = parts.get(1) {
+                    if let Some(query) = parts.get(2) {
+                        let limit = parts.get(3).unwrap_or(&"5").parse::<usize>().unwrap_or(5);
+
+                        if let Some(folder) = folders.get(&id.to_string()) {
+                            let res = folder
+                                .read()
+                                .await
+                                .get_db_ro()
+                                .search(String::from(*query), limit);
+                            if let Ok(results) = res {
+                                for (i, result) in results.iter().enumerate() {
+                                    println!("{}: {}", i + 1, result.path);
+                                }
+                            } else if let Err(error) = res {
+                                println!("Error while searching: {}", error.to_string());
+                            }
+                            println!("Search complete");
+                        } else {
+                            println!("Cannot find folder");
+                        }
+                    } else {
+                        println!("Query invalid");
+                    }
+                } else {
+                    println!("ID invalid");
+                }
+            } else if *action == "exit" {
+                break;
+            } else {
+                println!("{}: command not found", *action);
+            }
+        }
+    }
+}
+
 async fn cli() {
     let mut path = String::new();
     println!("Enter the path to index:");
@@ -107,8 +195,9 @@ async fn cli() {
         .read_line(&mut path)
         .expect("Failed to read line");
     let path = path.trim().to_string();
-    let mut indexer =
-        FileIndexer::new(path, FileIndexerConfig::new()).expect("Failed to create file indexer");
+    let mut config = FileIndexerConfig::new();
+    config.number_of_threads = 16;
+    let mut indexer = FileIndexer::new(path, config).expect("Failed to create file indexer");
     let mut index = String::new();
     println!("Index now (Y/n):");
     std::io::stdin()
@@ -147,18 +236,23 @@ async fn cli() {
 
 #[tokio::main]
 async fn main() {
+    // Small test
     let action = std::env::args().nth(1);
     if action.is_none() {
-        println!("Please provide an action: ai, mcp or cli");
+        println!("Please provide an action: ai, mcp, cli or daemon");
         return;
     }
     let action = action.unwrap();
     if action == "ai" {
+        #[cfg(feature = "ai")]
         test_ai().await;
     } else if action == "mcp" {
+        #[cfg(feature = "mcp")]
         test_mcpserver().await.expect("Error while running MCP");
     } else if action == "cli" {
         cli().await;
+    } else if action == "daemon" {
+        daemon().await;
     } else {
         println!("Unknown action: {}", action);
     }

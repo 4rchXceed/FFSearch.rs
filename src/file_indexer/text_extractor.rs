@@ -22,30 +22,27 @@ pub async fn extract(path: String, max_bytes: usize) -> Result<String, String> {
     }
     let mut content_bin = Vec::new();
     file.read_to_end(&mut content_bin).unwrap();
-    let content = String::from_utf8(content_bin.clone());
-    if content.is_ok() {
-        return Ok(content.unwrap());
-    }
-    let result = xberg::extract(
-        ExtractInput::from_bytes(
-            content_bin.as_slice(),
-            detect_mime_type_from_bytes(&content_bin)
-                .map_err(|e| format!("Couldn't detect file MIME type: {}", e.to_string()))?, // TODO
-            None,
-        ),
-        &ExtractionConfig::default(),
-    )
-    .await;
-    if result.is_ok() {
-        let result = result.unwrap();
-        return Ok(result
-            .results
-            .iter()
-            .map(|e| e.content.clone())
-            .collect::<Vec<String>>()
-            .join("\n"));
+    let mime_type = detect_mime_type_from_bytes(&content_bin)
+        .map_err(|e| format!("Couldn't detect file MIME type: {}", e.to_string()))?;
+    if mime_type == "application/pdf" {
+        return Ok(pdf_extract::extract_text_from_mem(&content_bin).map_err(|e| e.to_string())?);
     } else {
-        return Err(result.unwrap_err().to_string());
+        let result = xberg::extract(
+            ExtractInput::from_bytes(content_bin.as_slice(), mime_type, None),
+            &ExtractionConfig::default(),
+        )
+        .await;
+        if result.is_ok() {
+            let result = result.unwrap();
+            return Ok(result
+                .results
+                .iter()
+                .map(|e| e.content.clone())
+                .collect::<Vec<String>>()
+                .join("\n"));
+        } else {
+            return Err(result.unwrap_err().to_string());
+        }
     }
 }
 

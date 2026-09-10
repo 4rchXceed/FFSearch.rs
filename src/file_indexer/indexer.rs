@@ -1,4 +1,8 @@
-use std::{fs::File, path::PathBuf, time::UNIX_EPOCH};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
 
 use tantivy::DateTime;
 use thiserror::Error;
@@ -128,7 +132,7 @@ impl FileIndexer {
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
         let mut all_files_to_process = Vec::new();
         let number_of_threads = self.config.number_of_threads;
-        for file in files.iter() {
+        for file in tqdm(files.iter()).desc(Some(String::from("Checking every file"))) {
             let result = self.index_one_file(file, &all);
             if result.is_err() {
                 all_errors.push(result.err().unwrap());
@@ -171,49 +175,7 @@ impl FileIndexer {
                 let results = results.unwrap();
                 for (file, operation, result) in results {
                     if result.is_ok() {
-                        let content = result.unwrap();
-                        let file_path = file.to_string_lossy().to_string();
-                        let local_file_path = self.to_local_path(file_path.clone());
-                        if local_file_path.is_ok() {
-                            let local_file_path = local_file_path.unwrap();
-                            let timestamp = self.extract_mod_date(&file);
-                            if timestamp.is_ok() {
-                                let timestamp = timestamp.unwrap();
-                                match operation {
-                                    FileOperationNeeded::Add => {
-                                        let result = self.db.add_document(
-                                            local_file_path,
-                                            content,
-                                            timestamp,
-                                        );
-                                        if result.is_err() {
-                                            all_errors.push(FileIndexerError::CouldNotAddDocument(
-                                                result.err().unwrap(),
-                                            ));
-                                        }
-                                    }
-                                    FileOperationNeeded::Update => {
-                                        let result = self.db.update_document(
-                                            local_file_path,
-                                            content,
-                                            timestamp,
-                                        );
-                                        if result.is_err() {
-                                            all_errors.push(
-                                                FileIndexerError::CouldNotUpdateDocument(
-                                                    result.err().unwrap(),
-                                                ),
-                                            );
-                                        }
-                                    }
-                                    FileOperationNeeded::None => {}
-                                };
-                            } else {
-                                all_errors.push(timestamp.err().unwrap());
-                            }
-                        } else {
-                            all_errors.push(local_file_path.err().unwrap());
-                        }
+                        self.process_result(&mut all_errors, file, operation, result);
                     } else {
                         all_errors
                             .push(FileIndexerError::GetFileContentError(result.err().unwrap()));
@@ -247,6 +209,55 @@ impl FileIndexer {
         return Ok(all_errors);
     }
 
+    fn process_result(
+        &mut self,
+        all_errors: &mut Vec<FileIndexerError>,
+        file: PathBuf,
+        operation: FileOperationNeeded,
+        file_content_op: Result<String, String>,
+    ) {
+        if file_content_op.is_ok() {
+            let content = file_content_op.unwrap();
+            let file_path = file.to_string_lossy().to_string();
+            let local_file_path = self.to_local_path(file_path.clone());
+            if local_file_path.is_ok() {
+                let local_file_path = local_file_path.unwrap();
+                let timestamp = self.extract_mod_date(&file);
+                if timestamp.is_ok() {
+                    let timestamp = timestamp.unwrap();
+                    match operation {
+                        FileOperationNeeded::Add => {
+                            let result = self.db.add_document(local_file_path, content, timestamp);
+                            if result.is_err() {
+                                all_errors.push(FileIndexerError::CouldNotAddDocument(
+                                    result.err().unwrap(),
+                                ));
+                            }
+                        }
+                        FileOperationNeeded::Update => {
+                            let result =
+                                self.db.update_document(local_file_path, content, timestamp);
+                            if result.is_err() {
+                                all_errors.push(FileIndexerError::CouldNotUpdateDocument(
+                                    result.err().unwrap(),
+                                ));
+                            }
+                        }
+                        FileOperationNeeded::None => {}
+                    };
+                } else {
+                    all_errors.push(timestamp.err().unwrap());
+                }
+            } else {
+                all_errors.push(local_file_path.err().unwrap());
+            }
+        } else {
+            all_errors.push(FileIndexerError::GetFileContentError(
+                file_content_op.err().unwrap(),
+            ));
+        }
+    }
+
     /// Converts a file path (absolute/relative) to a local file path (relative to the folder being indexed).
     /// Parameters:
     /// - path: the file path to convert.
@@ -261,12 +272,39 @@ impl FileIndexer {
         return Ok(local_file_path);
     }
 
+    /// Indexes one (new) file
+    /// Parameter:
+    /// - path: The *absolute* path to the file.
+    /// - operation: the type of operation
+    /// Returns:
+    /// - Option<String>: if there's an error
+    pub async fn index(&mut self, path: String, operation: FileOperationNeeded) -> Option<String> {
+        let content = extract(path.clone(), self.config.max_file_size).await;
+        let mut errors = Vec::new();
+        self.process_result(
+            &mut errors,
+            Path::new(&path).to_path_buf(),
+            operation,
+            content,
+        );
+        if errors.first().is_none() {
+            let commit_error = self
+                .db
+                .commit()
+                .map_err(|e| FileIndexerError::DatabaseCommitError(e));
+            if commit_error.is_err() {
+                errors.push(commit_error.err().unwrap());
+            }
+        }
+        return errors.first().map(|e| e.to_string());
+    }
+
     /// Indexes a single file to the database.
     /// Parameters:
     /// - file: the file to index (as PathBuf)
     /// - db_files: the list of files already in the database.
     /// Returns: an error if the file could not be indexed, otherwise None.
-    pub fn index_one_file(
+    fn index_one_file(
         &mut self,
         file: &PathBuf,
         db_files: &Vec<Document>,

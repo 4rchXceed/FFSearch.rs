@@ -1,4 +1,4 @@
-use std::{path::Path, sync::mpsc::RecvError};
+use std::path::Path;
 
 use tantivy::{
     DateTime, DocAddress, Index, IndexReader, IndexWriter, TantivyDocument, TantivyError, Term,
@@ -80,10 +80,6 @@ pub enum DatabaseError {
     CouldNotOpenIndexError(TantivyError),
     #[error("Could not parse the query: {0}, error: {1}")]
     CouldNotParseQuery(String, String),
-    #[error("Wanted {0} but received {0} (thread communication)")]
-    WantedThreadObjectReceivedOtherType(String, String),
-    #[error("Thread recv error")]
-    NoThreadRecv,
 }
 
 /// The database is the main search engine of the program.
@@ -320,8 +316,9 @@ impl Database {
     /// Removes a document from the database
     /// Parameters:
     /// - path: the path of the document to remove
+    ///
     /// Returns:
-    /// - Result<(), ()>: Ok(()) if the document was removed, Err(()) if the document was not found
+    /// - Result<String, DatabaseError>: Ok(String) the uuid of the document that was removed, Err(DatabaseError) if there's an error
     pub fn remove_document(&mut self, path: String) -> Result<String, DatabaseError> {
         let document = self.get(path.clone())?;
         let term_query = TermQuery::new(

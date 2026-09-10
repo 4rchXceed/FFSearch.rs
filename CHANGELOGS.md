@@ -27,3 +27,10 @@
 + Added multithreading for indexion
 ~ Switched from extractous to xberg
 ~ Changed a bunch of other stuff/performance improvements
+
+## Last commit: 1dfda922b9cc0485624a3bbff0c22272947d9996
++ Features usage for cargo / way faster builds
++ Daemon component
++ Use wild for linking for Linux
++ Daemon manager
++ Other smaller improvements
