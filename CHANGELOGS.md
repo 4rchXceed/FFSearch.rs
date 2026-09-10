@@ -34,3 +34,6 @@
 + Use wild for linking for Linux
 + Daemon manager
 + Other smaller improvements
+
+## Last commit: 779ecc745dce28588cb828161c07a523281b457e
++ Code review / applied best practices

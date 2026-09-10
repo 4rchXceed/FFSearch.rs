@@ -1,15 +1,9 @@
 #[cfg(feature = "ai")]
 use rig::client::{EmbeddingsClient, Nothing};
-use tokio::sync::RwLock;
-
-#[cfg(feature = "ai")]
 use std::io::Write;
 #[cfg(feature = "ai")]
 use std::process::ExitCode;
-use std::{collections::HashMap, io::Write, sync::Arc};
-#[cfg(feature = "mcp")]
 use std::{collections::HashMap, sync::Arc};
-#[cfg(feature = "mcp")]
 use tokio::sync::RwLock;
 
 #[cfg(feature = "ai")]
@@ -25,10 +19,10 @@ use crate::mcp::{
     server::{McpInstancesContext, McpServer},
 };
 
-use crate::{
-    daemon::manager::DaemonManager,
-    file_indexer::{config::FileIndexerConfig, indexer::FileIndexer},
-};
+#[cfg(feature = "daemon")]
+use crate::daemon::manager::DaemonManager;
+
+use crate::file_indexer::{config::FileIndexerConfig, indexer::FileIndexer};
 
 #[cfg(feature = "ai")]
 mod ai;
@@ -238,22 +232,22 @@ async fn cli() {
 async fn main() {
     // Small test
     let action = std::env::args().nth(1);
-    if action.is_none() {
+    if let Some(action) = action {
+        if action == "ai" {
+            #[cfg(feature = "ai")]
+            test_ai().await;
+        } else if action == "mcp" {
+            #[cfg(feature = "mcp")]
+            test_mcpserver().await.expect("Error while running MCP");
+        } else if action == "cli" {
+            cli().await;
+        } else if action == "daemon" {
+            daemon().await;
+        } else {
+            println!("Unknown action: {}", action);
+        }
+    } else {
         println!("Please provide an action: ai, mcp, cli or daemon");
         return;
-    }
-    let action = action.unwrap();
-    if action == "ai" {
-        #[cfg(feature = "ai")]
-        test_ai().await;
-    } else if action == "mcp" {
-        #[cfg(feature = "mcp")]
-        test_mcpserver().await.expect("Error while running MCP");
-    } else if action == "cli" {
-        cli().await;
-    } else if action == "daemon" {
-        daemon().await;
-    } else {
-        println!("Unknown action: {}", action);
     }
 }

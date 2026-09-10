@@ -1,5 +1,5 @@
 use std::{
-    fs::File,
+    fs::{File, canonicalize},
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
@@ -85,22 +85,21 @@ impl FileIndexer {
     /// - file: the file to check.
     /// Returns: bool - if the file should be indexed.
     fn is_correct_filename(&self, file: &DirEntry) -> bool {
-        let db_folder = self.db.get_config().database_folder_prefix;
-        if file.file_name().to_str().is_none()
-            || file.file_name().to_str().unwrap().starts_with(".")
-            || file.path().parent().is_none()
-            || file.path().parent().unwrap().to_str().is_none()
-            || file
-                .path()
-                .parent()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .ends_with(db_folder.as_str())
+        let file = canonicalize(file.path());
+        let db_folder = canonicalize(self.db.get_index_path());
+
+        if let Ok(file) = file
+            && let Ok(db_folder) = db_folder
         {
-            return false;
+            let file_string = file.to_string_lossy().to_string();
+
+            if file_string.starts_with(".") || file.starts_with(db_folder) {
+                return false;
+            } else {
+                return true;
+            }
         } else {
-            return true;
+            return false;
         }
     }
 
@@ -131,21 +130,26 @@ impl FileIndexer {
 
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
         let mut all_files_to_process = Vec::new();
+
         let number_of_threads = self.config.number_of_threads;
+
         for file in tqdm(files.iter()).desc(Some(String::from("Checking every file"))) {
             let result = self.index_one_file(file, &all);
-            if result.is_err() {
-                all_errors.push(result.err().unwrap());
-            } else {
-                let result = result.unwrap();
+
+            if let Err(error) = result {
+                all_errors.push(error);
+            } else if let Ok(result) = result {
                 match result {
                     FileOperationNeeded::None => {}
                     _ => all_files_to_process.push((file.clone(), result)),
                 }
             }
         }
+
         let mut threads = Vec::new();
+
         let max_file_size = self.config.max_file_size;
+
         for th in 0..number_of_threads {
             let thread_process_files = all_files_to_process
                 .iter()
@@ -154,6 +158,7 @@ impl FileIndexer {
                 .map(|(_, d)| (d.0.clone(), d.1.clone()))
                 .collect::<Vec<(PathBuf, FileOperationNeeded)>>()
                 .clone();
+
             threads.push(tokio::spawn(async move {
                 let mut results = Vec::new();
                 for (file, operation) in
@@ -171,14 +176,12 @@ impl FileIndexer {
 
         for thread in threads {
             let results = thread.wait();
-            if results.is_ok() {
-                let results = results.unwrap();
+            if let Ok(results) = results {
                 for (file, operation, result) in results {
                     if result.is_ok() {
                         self.process_result(&mut all_errors, file, operation, result);
-                    } else {
-                        all_errors
-                            .push(FileIndexerError::GetFileContentError(result.err().unwrap()));
+                    } else if let Err(error) = result {
+                        all_errors.push(FileIndexerError::GetFileContentError(error));
                     }
                 }
             } else {
@@ -188,16 +191,16 @@ impl FileIndexer {
 
         let local_files: Vec<String> = files
             .iter()
-            .map(|f| self.to_local_path(f.to_string_lossy().to_string()).unwrap())
+            .map(|f| self.to_local_path(f.to_string_lossy().to_string()))
+            .filter(|p| p.is_ok())
+            .map(|p| p.unwrap_or_default())
             .collect();
 
         for db_file in all {
             if !local_files.contains(&db_file.path) {
                 let result = self.db.remove_document(db_file.path);
-                if result.is_err() {
-                    all_errors.push(FileIndexerError::FailedToRemoveDocument(
-                        result.err().unwrap(),
-                    ));
+                if let Err(error) = result {
+                    all_errors.push(FileIndexerError::FailedToRemoveDocument(error));
                 }
             }
         }
@@ -216,45 +219,36 @@ impl FileIndexer {
         operation: FileOperationNeeded,
         file_content_op: Result<String, String>,
     ) {
-        if file_content_op.is_ok() {
-            let content = file_content_op.unwrap();
+        if let Ok(content) = file_content_op {
             let file_path = file.to_string_lossy().to_string();
             let local_file_path = self.to_local_path(file_path.clone());
-            if local_file_path.is_ok() {
-                let local_file_path = local_file_path.unwrap();
+            if let Ok(local_file_path) = local_file_path {
                 let timestamp = self.extract_mod_date(&file);
-                if timestamp.is_ok() {
-                    let timestamp = timestamp.unwrap();
+                if let Ok(timestamp) = timestamp {
                     match operation {
                         FileOperationNeeded::Add => {
                             let result = self.db.add_document(local_file_path, content, timestamp);
-                            if result.is_err() {
-                                all_errors.push(FileIndexerError::CouldNotAddDocument(
-                                    result.err().unwrap(),
-                                ));
+                            if let Err(error) = result {
+                                all_errors.push(FileIndexerError::CouldNotAddDocument(error));
                             }
                         }
                         FileOperationNeeded::Update => {
                             let result =
                                 self.db.update_document(local_file_path, content, timestamp);
-                            if result.is_err() {
-                                all_errors.push(FileIndexerError::CouldNotUpdateDocument(
-                                    result.err().unwrap(),
-                                ));
+                            if let Err(error) = result {
+                                all_errors.push(FileIndexerError::CouldNotUpdateDocument(error));
                             }
                         }
                         FileOperationNeeded::None => {}
                     };
-                } else {
-                    all_errors.push(timestamp.err().unwrap());
+                } else if let Err(error) = timestamp {
+                    all_errors.push(error);
                 }
-            } else {
-                all_errors.push(local_file_path.err().unwrap());
+            } else if let Err(error) = local_file_path {
+                all_errors.push(error);
             }
-        } else {
-            all_errors.push(FileIndexerError::GetFileContentError(
-                file_content_op.err().unwrap(),
-            ));
+        } else if let Err(error) = file_content_op {
+            all_errors.push(FileIndexerError::GetFileContentError(error));
         }
     }
 
@@ -264,12 +258,16 @@ impl FileIndexer {
     /// Returns: the local file path as a string.
     fn to_local_path(&self, path: String) -> Result<String, FileIndexerError> {
         let local_file_path = path.strip_prefix(self.folder.as_str());
-        if local_file_path.is_none() {
+
+        if let Some(local_file_path) = local_file_path {
+            let mut local_file_path = trim_custom(local_file_path.to_string(), "/");
+
+            local_file_path = trim_custom(local_file_path, "\\");
+
+            return Ok(local_file_path);
+        } else {
             return Err(FileIndexerError::InvalidFilePath(path));
         }
-        let mut local_file_path = trim_custom(local_file_path.unwrap().to_string(), "/");
-        local_file_path = trim_custom(local_file_path, "\\");
-        return Ok(local_file_path);
     }
 
     /// Indexes one (new) file
@@ -280,22 +278,27 @@ impl FileIndexer {
     /// - Option<String>: if there's an error
     pub async fn index(&mut self, path: String, operation: FileOperationNeeded) -> Option<String> {
         let content = extract(path.clone(), self.config.max_file_size).await;
+
         let mut errors = Vec::new();
+
         self.process_result(
             &mut errors,
             Path::new(&path).to_path_buf(),
             operation,
             content,
         );
+
         if errors.first().is_none() {
             let commit_error = self
                 .db
                 .commit()
                 .map_err(|e| FileIndexerError::DatabaseCommitError(e));
-            if commit_error.is_err() {
-                errors.push(commit_error.err().unwrap());
+
+            if let Err(error) = commit_error {
+                errors.push(error);
             }
         }
+
         return errors.first().map(|e| e.to_string());
     }
 
@@ -309,26 +312,26 @@ impl FileIndexer {
         file: &PathBuf,
         db_files: &Vec<Document>,
     ) -> Result<FileOperationNeeded, FileIndexerError> {
-        let timestamp = self.extract_mod_date(&file);
-        if timestamp.is_ok() {
-            let timestamp = timestamp.unwrap();
-            let file_path = file.to_string_lossy().to_string();
-            let local_file_path = self.to_local_path(file_path.clone())?;
+        let timestamp = self.extract_mod_date(&file)?;
 
-            let same = db_files
-                .iter()
-                .find(|h| same_path((**h).path.as_str(), local_file_path.as_str()));
-            // Case: the file is not in the database, add it
-            if same.is_none() {
-                return Ok(FileOperationNeeded::Add);
+        let file_path = file.to_string_lossy().to_string();
+
+        let local_file_path = self.to_local_path(file_path.clone())?;
+
+        let same = db_files
+            .iter()
+            .find(|h| same_path((**h).path.as_str(), local_file_path.as_str()));
+
+        if let Some(same) = same
+            && same.modification_date != DateTime::from_timestamp_secs(timestamp)
+        {
             // Case: the file is in the database but the modification date has changed, update it
-            } else if same.unwrap().modification_date != DateTime::from_timestamp_secs(timestamp) {
-                return Ok(FileOperationNeeded::Update);
-            }
-            return Ok(FileOperationNeeded::None);
-        } else {
-            return Err(timestamp.err().unwrap());
+            return Ok(FileOperationNeeded::Update);
+        } else if same.is_none() {
+            // Case: the file is not in the database, add it
+            return Ok(FileOperationNeeded::Add);
         }
+        return Ok(FileOperationNeeded::None);
     }
 
     /// Extracts the modification date of a file.
@@ -336,28 +339,26 @@ impl FileIndexer {
     /// - file: the file to extract the modification date from.
     /// Returns: the modification date as a unix timestamp, or an error if the file could not be read.
     fn extract_mod_date(&self, file: &PathBuf) -> Result<i64, FileIndexerError> {
-        let meta = std::fs::metadata(file);
-        if meta.is_ok() {
-            let timestamp: i64;
-            let meta = meta.unwrap();
-            let mod_date = meta.modified();
-            if mod_date.is_err() {
+        let meta = std::fs::metadata(file).map_err(|e| FileIndexerError::GetFileMetaError(e))?;
+        let timestamp: i64;
+        let mod_date = meta.modified();
+
+        if let Ok(mod_date) = mod_date {
+            let timestamp_op = mod_date.duration_since(UNIX_EPOCH);
+
+            if let Ok(timestamp_op) = timestamp_op {
+                timestamp = timestamp_op.as_secs() as i64;
+            } else {
+                // Welp, time went backwards
                 timestamp = chrono::Local::now().timestamp();
                 self.write_mod_date(file, timestamp)?;
-            } else {
-                let timestamp_op = mod_date.unwrap().duration_since(UNIX_EPOCH);
-                if timestamp_op.is_ok() {
-                    timestamp = timestamp_op.unwrap().as_secs() as i64;
-                } else {
-                    // Welp, time went backwards
-                    timestamp = chrono::Local::now().timestamp();
-                    self.write_mod_date(file, timestamp)?;
-                }
             }
-            return Ok(timestamp);
         } else {
-            return Err(FileIndexerError::GetFileMetaError(meta.err().unwrap()));
+            timestamp = chrono::Local::now().timestamp();
+            self.write_mod_date(file, timestamp)?;
         }
+
+        return Ok(timestamp);
     }
 
     /// Writes the modification date of a file to the database.
@@ -366,19 +367,15 @@ impl FileIndexer {
     /// - timestamp: the modification date as a unix timestamp.
     /// Returns: an error if the file could not be written, otherwise None.
     fn write_mod_date(&self, file: &PathBuf, timestamp: i64) -> Result<(), FileIndexerError> {
-        let file = File::open(file);
-        if file.is_ok() {
-            let file = file.unwrap();
-            file.set_modified(std::time::SystemTime::from(
-                std::time::UNIX_EPOCH + std::time::Duration::from_secs(timestamp as u64),
-            ))
-            .map_err(|e| FileIndexerError::OpenFileToWriteModDateError(e))?;
-            return Ok(());
-        } else {
-            return Err(FileIndexerError::OpenFileToWriteModDateError(
-                file.err().unwrap(),
-            ));
-        }
+        let file =
+            File::open(file).map_err(|e| FileIndexerError::OpenFileToWriteModDateError(e))?;
+
+        file.set_modified(std::time::SystemTime::from(
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(timestamp as u64),
+        ))
+        .map_err(|e| FileIndexerError::OpenFileToWriteModDateError(e))?;
+
+        return Ok(());
     }
 
     /// Returns: a mutable reference to the database.
@@ -494,6 +491,7 @@ mod tests {
         write_to_file(path.unwrap(), THIRD_FILE_CONTENT);
 
         let errors = indexer.sync().unwrap();
+        println!("{:?}", errors);
         assert!(errors.is_empty());
 
         let db = indexer.get_db();

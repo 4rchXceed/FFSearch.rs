@@ -7,21 +7,21 @@ use xberg::{ExtractInput, ExtractionConfig, detect_mime_type_from_bytes};
 /// Parameters:
 /// - path: the path to the file to extract text from
 pub async fn extract(path: String, max_bytes: usize) -> Result<String, String> {
-    let file = File::open(path);
-    if file.is_err() {
-        return Err(String::from("File not found"));
+    let mut file =
+        File::open(path).map_err(|e| format!("Failed to open file: {}", e.to_string()))?;
+
+    let metadata = file
+        .metadata()
+        .map_err(|e| format!("Could not read file metadata: {}", e))?;
+
+    if metadata.len() > max_bytes as u64 {
+        return Err(String::from("File too large"));
     }
-    let mut file = file.unwrap();
-    let metadata = file.metadata();
-    if metadata.is_ok() {
-        if metadata.unwrap().len() > max_bytes as u64 {
-            return Err(String::from("File too large"));
-        }
-    } else {
-        return Err(String::from("Could not read file metadata"));
-    }
+
     let mut content_bin = Vec::new();
-    file.read_to_end(&mut content_bin).unwrap();
+    file.read_to_end(&mut content_bin)
+        .map_err(|e| e.to_string())?;
+
     let mime_type = detect_mime_type_from_bytes(&content_bin)
         .map_err(|e| format!("Couldn't detect file MIME type: {}", e.to_string()))?;
     if mime_type == "application/pdf" {
@@ -31,18 +31,14 @@ pub async fn extract(path: String, max_bytes: usize) -> Result<String, String> {
             ExtractInput::from_bytes(content_bin.as_slice(), mime_type, None),
             &ExtractionConfig::default(),
         )
-        .await;
-        if result.is_ok() {
-            let result = result.unwrap();
-            return Ok(result
-                .results
-                .iter()
-                .map(|e| e.content.clone())
-                .collect::<Vec<String>>()
-                .join("\n"));
-        } else {
-            return Err(result.unwrap_err().to_string());
-        }
+        .await
+        .map_err(|e| e.to_string())?;
+        return Ok(result
+            .results
+            .iter()
+            .map(|e| e.content.clone())
+            .collect::<Vec<String>>()
+            .join("\n"));
     }
 }
 

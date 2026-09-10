@@ -20,23 +20,26 @@ pub fn join_path(base: &str, path: &str) -> String {
 pub fn same_path(path1: &str, path2: &str) -> bool {
     let path1 = PathBuf::from_str(path1);
     let path2 = PathBuf::from_str(path2);
-    if path1.is_err() || path2.is_err() {
+    if let Ok(path1) = path1
+        && let Ok(path2) = path2
+    {
+        return path1 == path2;
+    } else {
         return false;
     }
-    let path1 = path1.unwrap();
-    let path2 = path2.unwrap();
-    return path1 == path2;
 }
 
 pub fn trim_custom(string: String, trim_val: &str) -> String {
     let mut result = string;
     let res_pre = result.strip_prefix(trim_val);
-    if res_pre.is_some() {
-        result = res_pre.unwrap().to_string();
+    if let Some(pre) = res_pre {
+        result = pre.to_string();
     }
+
     let res_suf = result.strip_suffix(trim_val);
-    if res_suf.is_some() {
-        result = res_suf.unwrap().to_string();
+    if let Some(suf) = res_suf {
+        result = suf.to_string();
     }
+
     return result;
 }

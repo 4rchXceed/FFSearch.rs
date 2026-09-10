@@ -25,6 +25,7 @@ impl DaemonWorker {
     pub fn new() -> Result<(Self, Sender<DaemonEvent>), String> {
         let (tx, rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(100);
         let (tx_event, rx_event) = tokio::sync::mpsc::channel::<DaemonEvent>(100);
+
         let watcher = notify::RecommendedWatcher::new(
             move |res| {
                 let _ = tx.blocking_send(res);
@@ -32,6 +33,7 @@ impl DaemonWorker {
             Config::default(),
         )
         .map_err(|e| e.to_string())?;
+
         return Ok((
             Self {
                 folders: HashMap::new(),
@@ -60,10 +62,13 @@ impl DaemonWorker {
         if !Path::new(&folder).is_absolute() {
             return Err(String::from("Path MUST be absolute"));
         }
+
         self.folders.insert(folder.clone(), indexer);
+
         self.watcher
             .watch(&Path::new(&folder), RecursiveMode::Recursive)
             .map_err(|e| e.to_string())?;
+
         return Ok(());
     }
 
@@ -71,7 +76,9 @@ impl DaemonWorker {
         self.watcher
             .unwatch(&Path::new(&folder))
             .map_err(|e| e.to_string())?;
+
         self.folders.remove(&folder);
+
         return Ok(());
     }
 
@@ -96,6 +103,7 @@ impl DaemonWorker {
             },
             None => Ok(()),
         };
+
         if let Err(err) = error {
             // TODO: logs
             eprintln!("Error while handling event: {}", err);
@@ -110,8 +118,7 @@ impl DaemonWorker {
                         for path in &event.paths {
                             let path = path.to_string_lossy().to_string();
                             let folder = self.get_from_path(&path);
-                            if folder.is_some() {
-                                let (db_path, folder) = folder.unwrap();
+                            if let Some((db_path, folder)) = folder {
                                 process_event(&event, &path, db_path, folder).await;
                             } else {
                                 // TODO: Log
@@ -135,24 +142,23 @@ async fn process_event(
     db_path: String,
     folder: &Arc<RwLock<FileIndexer>>,
 ) {
-    let mut error;
     let mut folder_write = folder.write().await;
     // Check if it's not the system folder
-    if !path.starts_with(&folder_write.get_db_ro().get_index_path()) {
+    let error = if !path.starts_with(&folder_write.get_db_ro().get_index_path()) {
         if event.kind.is_modify() || event.kind.is_create() {
             // Already exists
             if folder_write.get_db_ro().get(db_path).is_ok() {
-                error = folder_write
+                folder_write
                     .index(path.clone(), FileOperationNeeded::Update)
-                    .await;
+                    .await
             // Doesn't exists
             } else {
-                error = folder_write
+                folder_write
                     .index(path.clone(), FileOperationNeeded::Add)
-                    .await;
+                    .await
             }
         } else if event.kind.is_remove() {
-            error = folder_write
+            let mut error = folder_write
                 .get_db()
                 .remove_document(db_path)
                 .map_err(|e| e.to_string())
@@ -164,14 +170,16 @@ async fn process_event(
                     .map_err(|e| e.to_string())
                     .err();
             }
+            error
         } else {
-            error = None;
+            None
         }
-
-        if error.is_some() {
-            // TODO: Log
-            eprintln!("Error while indexing {}: {}", path, error.unwrap());
-        }
+    } else {
+        None
+    };
+    if let Some(error) = error {
+        // TODO: Log
+        eprintln!("Error while indexing {}: {}", path, error);
     }
 }
 
@@ -219,18 +227,25 @@ mod tests {
         .expect("Failed to open file");
         file.write(b"Hello World~").await.expect("Write failed");
 
-        sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
+        let mut tries = 0;
+        loop {
+            let file1 = arc_new
+                .read()
+                .await
+                .get_db_ro()
+                .get(String::from("file1.txt"));
+            if let Ok(file1) = file1
+                && file1.content == Some(String::from("Hello World~"))
+            {
+                break;
+            } else if tries < 10 {
+                tries += 1;
+            } else {
+                panic!("Test failed >5s waiting !!!");
+            }
+            sleep(Duration::from_millis(500)).await; // TODO: Maybe find a better way to do it?
+        }
 
-        println!("{:?}", arc_new.read().await.get_db_ro().get_all(false));
-        let file1 = arc_new
-            .read()
-            .await
-            .get_db_ro()
-            .get(String::from("file1.txt"));
-        assert_eq!(
-            file1.expect("File1 error").content,
-            Some(String::from("Hello World~"))
-        );
         th.abort();
     }
 }

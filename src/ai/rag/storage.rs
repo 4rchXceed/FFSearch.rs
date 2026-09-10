@@ -79,11 +79,14 @@ where
             .execute()
             .await
             .map_err(|_| AIError::OpenTableError)?;
+
         let search_params = SearchParams::default();
         let vector_index = LanceDbVectorIndex::new(table, self.model.clone(), "id", search_params)
             .await
             .map_err(|e| AIError::Other(e.to_string()))?;
+
         self.index = Some(vector_index);
+
         Ok(())
     }
 
@@ -100,18 +103,22 @@ where
         let documents_raw = db
             .get_all(false)
             .map_err(|e| AIError::FailedToGetAllDocuments(e))?;
+
         let mut documents = Vec::new();
+
         for doc in documents_raw {
-            if doc.content.is_some() {
-                let mut content = doc.content.unwrap().clone();
+            if let Some(mut content) = doc.content {
                 while content.len() > RAG_MAX_BATCH_SIZE {
                     let part: String = content.chars().take(RAG_MAX_BATCH_SIZE).collect();
+
                     documents.push(EmbedDocument {
                         content: part,
                         path: doc.path.clone(),
                     });
+
                     content = content.chars().skip(RAG_MAX_BATCH_SIZE).collect();
                 }
+
                 documents.push(EmbedDocument {
                     path: doc.path,
                     content: content,
@@ -154,10 +161,10 @@ where
             .map_err(|e| AIError::ListTableNamesError(e))?;
 
         if table_names.contains(&String::from("files")) {
-            let table_op = self.db.drop_table("files", &[]).await;
-            if table_op.is_err() {
-                return Err(AIError::OpenTableError);
-            }
+            self.db
+                .drop_table("files", &[])
+                .await
+                .map_err(|_| AIError::OpenTableError)?;
         }
 
         let table = self.ensure_table(documents).await?;
@@ -196,6 +203,7 @@ where
         // Create the table & save the data
         let record_batch =
             as_record_batch(embeddings, dims).map_err(|_| AIError::FailedToBuildRagDbDatas)?;
+
         let table = self
             .db
             .create_table("files", vec![record_batch])
@@ -224,6 +232,7 @@ where
                     .map_err(|e| AIError::CreateIndexError(e))?;
             }
         }
+
         return Ok(table);
     }
 }

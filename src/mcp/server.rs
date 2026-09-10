@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Error, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -74,8 +74,11 @@ impl McpServer {
         config: McpServerConfig,
     ) -> Result<(), std::io::Error> {
         let listener = tokio::net::TcpListener::bind(config.listen_addr.clone()).await?;
+
+        // TODO: Proper logging
         println!("Server listening to {}", config.listen_addr);
         Self::listen(listener, context).await;
+
         return Ok(());
     }
 
@@ -86,6 +89,7 @@ impl McpServer {
     /// - context: the MCP server thread-safe context
     async fn listen(listener: TcpListener, context: McpInstancesContext) {
         let session_manager = Arc::new(LocalSessionManager::default());
+
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
@@ -116,6 +120,7 @@ impl McpServer {
         session_manager: Arc<LocalSessionManager>,
     ) {
         let io = TokioIo::new(stream);
+
         tokio::spawn(async move {
             let service = TowerToHyperService::new(StreamableHttpService::new(
                 move || Ok(McpServer::new(context.clone())),
@@ -126,6 +131,7 @@ impl McpServer {
             let conn = hyper_util::server::conn::auto::Builder::new(TokioExecutor::default())
                 .serve_connection(io, service)
                 .await;
+
             if conn.is_err() {
                 eprintln!("Connection error: {:?}", conn.unwrap_err());
             }
@@ -146,11 +152,13 @@ impl McpServer {
     #[tool(description = "Lists all folders that are searchable")]
     async fn list_folders(&self) -> Result<CallToolResult, ErrorData> {
         let mut paths = Vec::new();
+
         for (id, folder) in self.context.folders.read().await.iter() {
             paths.push(format!("{}: {}", id, folder.get_db_ro().get_index_path()));
         }
-        let text = TextContent::new(paths.join(", "));
-        return Ok(CallToolResult::success(vec![ContentBlock::Text(text)]));
+
+        let content = ContentBlock::text(paths.join(", "));
+        return Ok(CallToolResult::success(vec![content]));
     }
 
     /// Tool: "Get the content of a file"
@@ -161,24 +169,24 @@ impl McpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let folders = self.context.folders.read().await;
         let indexer = folders.get(&folder_id);
-        if indexer.is_some() {
-            let indexer = indexer.unwrap();
+
+        if let Some(indexer) = indexer {
             let result = indexer.get_db_ro().get(path);
-            if result.is_ok() {
-                return Ok(CallToolResult::success(vec![ContentBlock::text(
-                    result
-                        .unwrap()
-                        .content
-                        .unwrap_or(String::from("No content")),
-                )]));
+
+            if let Ok(result) = result {
+                let content =
+                    ContentBlock::text(result.content.unwrap_or(String::from("No content")));
+
+                return Ok(CallToolResult::success(vec![content]));
             } else {
-                return Ok(CallToolResult::error(vec![ContentBlock::text(format!(
-                    "Error: {}",
-                    result.unwrap_err().to_string()
-                ))]));
+                let content =
+                    ContentBlock::text(format!("Error: {}", result.unwrap_err().to_string()));
+
+                return Ok(CallToolResult::error(vec![content]));
             }
         } else {
             let error_text = format!("Folder with id {} not found", folder_id);
+
             return Ok(CallToolResult::error(vec![ContentBlock::text(error_text)]));
         }
     }
@@ -195,28 +203,42 @@ impl McpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let folders = self.context.folders.read().await;
         let indexer = folders.get(&folder_id);
-        if indexer.is_some() {
-            let indexer = indexer.unwrap();
-            let search_results = indexer.get_db_ro().search(query, limit);
-            if search_results.is_err() {
-                let error_text = format!("Error while searching: {}", search_results.unwrap_err());
-                return Ok(CallToolResult::error(vec![ContentBlock::text(error_text)]));
-            } else {
-                let mut results = Vec::new();
-                for search_result in search_results.unwrap() {
-                    results.push(format!(
-                        "Path: {}, Last modification: {}",
-                        search_result.path,
-                        search_result.modification_date.into_primitive().to_string()
-                    ));
+
+        match indexer {
+            Some(indexer) => {
+                let search_results = indexer.get_db_ro().search(query, limit);
+
+                match search_results {
+                    Err(error) => {
+                        let error_text =
+                            ContentBlock::text(format!("Error while searching: {}", error));
+                        return Ok(CallToolResult::error(vec![error_text]));
+                    }
+
+                    Ok(search_results) => {
+                        let results: Vec<String> = search_results
+                            .iter()
+                            .map(|r| {
+                                format!(
+                                    "Path: {}, Last modification: {}",
+                                    r.path,
+                                    r.modification_date.into_primitive().to_string()
+                                )
+                            })
+                            .collect();
+
+                        let content = ContentBlock::text(results.join("\n"));
+
+                        return Ok(CallToolResult::success(vec![content]));
+                    }
                 }
-                return Ok(CallToolResult::success(vec![ContentBlock::text(
-                    results.join("\n"),
-                )]));
             }
-        } else {
-            let error_text = format!("Folder with id {} not found", folder_id);
-            return Ok(CallToolResult::error(vec![ContentBlock::text(error_text)]));
+            None => {
+                let error_text =
+                    ContentBlock::text(format!("Folder with id {} not found", folder_id));
+
+                return Ok(CallToolResult::error(vec![error_text]));
+            }
         }
     }
 }

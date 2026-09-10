@@ -99,7 +99,9 @@ impl Agent {
         embedding_model: Model,
     ) -> Result<Self, AIError> {
         let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
+
         rag_storage.load_index().await?;
+
         return Self::new_from_rag(client, config, rag_storage);
     }
 
@@ -113,7 +115,9 @@ impl Agent {
         embedding_model: Model,
     ) -> Result<Self, AIError> {
         let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
+
         rag_storage.init_from_db(db).await?;
+
         return Self::new_from_rag(client, config, rag_storage);
     }
 
@@ -126,6 +130,7 @@ impl Agent {
         storage: RagStorage<Model>,
     ) -> Result<Self, AIError> {
         let mut agent = client.agent(config.model.clone());
+
         agent = match config.provider {
             super::config::AgentProvider::Ollama => agent.additional_params(json!({
                 "think": config.think
@@ -134,8 +139,10 @@ impl Agent {
         }
         .preamble(&config.preamble)
         .dynamic_context(config.rag_config.top_results, storage);
+
         let messages = Vec::new();
         let agent = agent.build();
+
         return Ok(Self {
             agent: agent,
             messages: messages,
@@ -193,4 +200,3 @@ impl Agent {
         return &self.messages;
     }
 }
-// Test 2

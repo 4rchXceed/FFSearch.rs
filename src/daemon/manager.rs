@@ -15,6 +15,7 @@ pub struct DaemonManager {
 impl DaemonManager {
     pub fn new() -> Result<Self, String> {
         let (worker, sender) = DaemonWorker::new()?;
+
         return Ok(Self {
             daemon: Arc::new(RwLock::new(worker)),
             sender: sender,
@@ -23,6 +24,7 @@ impl DaemonManager {
 
     pub fn start(&mut self) {
         let daemon_ref = self.daemon.clone();
+
         tokio::spawn(async move {
             daemon_ref.write().await.start_worker().await;
         });
@@ -82,13 +84,20 @@ mod tests {
             .expect("Failed to open file");
         file.write(b"Hello World~").await.expect("Write failed");
 
-        sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
-
-        let file1 = arc.read().await.get_db_ro().get(String::from("file1.txt"));
-        assert_eq!(
-            file1.expect("File1 error").content,
-            Some(String::from("Hello World~"))
-        );
+        let mut tries = 0;
+        loop {
+            let file1 = arc.read().await.get_db_ro().get(String::from("file1.txt"));
+            if let Ok(file1) = file1
+                && file1.content == Some(String::from("Hello World~"))
+            {
+                break;
+            } else if tries < 10 {
+                tries += 1;
+            } else {
+                panic!("Test failed > 5s!!!");
+            }
+            sleep(Duration::from_millis(500)).await; // TODO: Maybe find a better way to do it?
+        }
 
         remove_file(format!("{}{}file1.txt", indexer_temp_dir, MAIN_SEPARATOR))
             .expect("Failed to remove file");

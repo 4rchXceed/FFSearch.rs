@@ -116,30 +116,23 @@ impl Database {
         // Create index path
         let index_path = join_path(folder.as_str(), config.database_folder_prefix.as_str());
 
-        let index: Index;
         let schema: Schema;
-        if !Path::new(&index_path).exists() {
+        let index = if !Path::new(&index_path).exists() {
             std::fs::create_dir_all(&index_path)
                 .map_err(|_| DatabaseError::CouldNotCreateDirError)?;
 
             schema = Self::build_schema();
 
             // Create the index
-            let index_op = Index::create_in_dir(&index_path, schema.clone());
-            if index_op.is_err() {
-                return Err(DatabaseError::IndexCreationError(index_op.err().unwrap()));
-            }
-            index = index_op.unwrap();
+            let index = Index::create_in_dir(&index_path, schema.clone())
+                .map_err(|e| DatabaseError::IndexCreationError(e))?;
+            index
         } else {
-            let index_op = Index::open_in_dir(&index_path);
-            if index_op.is_err() {
-                return Err(DatabaseError::CouldNotOpenIndexError(
-                    index_op.err().unwrap(),
-                ));
-            }
-            index = index_op.unwrap();
+            let index = Index::open_in_dir(&index_path)
+                .map_err(|e| DatabaseError::CouldNotOpenIndexError(e))?;
             schema = index.schema();
-        }
+            index
+        };
 
         // Create the index writer
         let index_writer = index
@@ -189,6 +182,7 @@ impl Database {
             // .reload_policy(ReloadPolicy::OnCommitWithDelay)
             .try_into()
             .map_err(|e| DatabaseError::CouldNotCreateReaderError(e))?;
+
         return Ok(reader);
     }
 
@@ -198,16 +192,17 @@ impl Database {
     /// - Schema: the schema
     fn build_schema() -> Schema {
         let mut schema_builder = Schema::builder();
+
+        let date_options = DateOptions::from(INDEXED)
+            .set_stored()
+            .set_fast()
+            .set_precision(DateTimePrecision::Seconds);
+
         schema_builder.add_text_field("path", STRING | STORED);
         schema_builder.add_text_field("content", TEXT | STORED);
         schema_builder.add_text_field("uuid", STRING | STORED);
-        schema_builder.add_date_field(
-            "moddate",
-            DateOptions::from(INDEXED)
-                .set_stored()
-                .set_fast()
-                .set_precision(DateTimePrecision::Seconds),
-        );
+        schema_builder.add_date_field("moddate", date_options);
+
         return schema_builder.build();
     }
 
@@ -221,11 +216,10 @@ impl Database {
         mod_date: i64,
     ) -> Result<String, DatabaseError> {
         let uuid = Uuid::new_v4().to_string();
-        let res = self.add_document_internal(path, content, mod_date, uuid.clone());
-        if res.is_err() {
-            return Err(DatabaseError::FailedToAddDocument(res.err().unwrap()));
-        }
-        return Ok(res.unwrap());
+
+        return self
+            .add_document_internal(path, content, mod_date, uuid.clone())
+            .map_err(|e| DatabaseError::FailedToAddDocument(e));
     }
 
     /// Since it's also used by update, we create an internal version that doesn't change it's UUID
@@ -237,11 +231,14 @@ impl Database {
         uuid: String,
     ) -> Result<String, TantivyError> {
         let mut doc = TantivyDocument::default();
+
         doc.add_text(self.path_field, path);
         doc.add_text(self.content_field, content);
         doc.add_text(self.uuid_field, uuid.clone());
         doc.add_date(self.mod_date_field, DateTime::from_timestamp_secs(mod_date));
+
         self.index_writer.add_document(doc)?;
+
         return Ok(uuid);
     }
 
@@ -293,24 +290,20 @@ impl Database {
         let mod_date = doc.get_first(self.mod_date_field)?;
         let mod_date = mod_date.as_datetime()?;
 
-        if !optimized {
+        let content = if optimized {
+            None
+        } else {
             let content = doc.get_first(self.content_field)?;
             let content = content.as_str()?;
+            Some(content.to_string())
+        };
 
-            return Some(Document::new(
-                String::from(path),
-                Some(String::from(content)),
-                String::from(uuid),
-                mod_date.clone(),
-            ));
-        } else {
-            return Some(Document::new(
-                String::from(path),
-                None,
-                String::from(uuid),
-                mod_date.clone(),
-            ));
-        }
+        return Some(Document::new(
+            String::from(path),
+            content,
+            String::from(uuid),
+            mod_date.clone(),
+        ));
     }
 
     /// Removes a document from the database
@@ -321,6 +314,7 @@ impl Database {
     /// - Result<String, DatabaseError>: Ok(String) the uuid of the document that was removed, Err(DatabaseError) if there's an error
     pub fn remove_document(&mut self, path: String) -> Result<String, DatabaseError> {
         let document = self.get(path.clone())?;
+
         let term_query = TermQuery::new(
             Term::from_field_text(self.uuid_field, &document.uuid),
             IndexRecordOption::Basic,
@@ -345,6 +339,7 @@ impl Database {
         mod_date: i64,
     ) -> Result<(), DatabaseError> {
         let old_doc_uuid = self.remove_document(path.clone())?;
+
         self.add_document_internal(path, new_content, mod_date, old_doc_uuid)
             .map_err(|e| DatabaseError::FailedToAddDocument(e))?;
 
@@ -369,8 +364,10 @@ impl Database {
         let reader = self.get_reader()?;
 
         let searcher = reader.searcher();
+
         let term = Term::from_field_text(self.path_field, path.as_str());
         let term_query = TermQuery::new(term, IndexRecordOption::Basic);
+
         let top_docs = searcher
             .search(&term_query, &TopDocs::with_limit(1).order_by_score())
             .map_err(|e| DatabaseError::SearchFailed(e))?;
@@ -382,11 +379,7 @@ impl Database {
             .map(|doc| doc.unwrap())
             .find(|doc| doc.path == path);
 
-        if the_only_doc.is_some() {
-            return Ok(the_only_doc.unwrap());
-        } else {
-            return Err(DatabaseError::NoResult);
-        }
+        return the_only_doc.ok_or(DatabaseError::NoResult);
     }
 
     /// Gets the config of the Database
@@ -440,27 +433,6 @@ mod tests {
 
     static FIRST_FILE_CONTENT: &str = "Catgirls are the best. YAY!";
     static SECOND_FILE_CONTENT: &str = "...Hatsune Miku... oo-ee-oo. YAY!";
-
-    // Saved for the index unittest
-    // fn write_to_file(path: OsString, content: &str) {
-    //     let file = File::create(path);
-    //     assert!(file.is_ok());
-    //     let res = file.unwrap().write_all(content.as_bytes());
-    //     assert!(res.is_ok())
-    // }
-
-    // fn generate_test_datas(path: &str) {
-    //     let file1_path = join_paths([path, "file1.txt"]);
-    //     let dir1_path = join_paths([path, "dir1"]);
-    //     let file2_path = join_paths([path, "file2.txt"]);
-    //     assert!(file1_path.is_ok());
-    //     assert!(dir1_path.is_ok());
-    //     assert!(file2_path.is_ok());
-    //     write_to_file(file1_path.unwrap(), FIRST_FILE_CONTENT);
-    //     let res = create_dir(dir1_path.unwrap());
-    //     assert!(res.is_ok());
-    //     write_to_file(file2_path.unwrap(), SECOND_FILE_CONTENT);
-    // }
 
     /// Setup function for the tests
     fn setup() -> (Database, TempDir) {
