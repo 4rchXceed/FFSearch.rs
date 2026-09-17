@@ -37,3 +37,10 @@
 
 ## Last commit: 779ecc745dce28588cb828161c07a523281b457e
 + Code review / applied best practices
+
+## Last commit: a8e75936bd1f7fd1a6d35a531722ed1a6a4bcc4e
+~ Finished code-doc for daemon
++ Fixed some bugs
++ Proper logging
++ Small README
++ LOGOOO!

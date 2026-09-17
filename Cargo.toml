@@ -34,6 +34,7 @@ serde = { version="1.0.229", optional=true }
 hyper-util = { version = "0.1.20", features = ["server", "service"], optional=true }
 # Daemon
 notify = { version="8.2.0", optional=true }
+log = "0.4.34"
 
 [dev-dependencies]
 tempdir = "0.3.7"

@@ -7,7 +7,7 @@ use hyper_util::{
 use rmcp::{
     ErrorData, ServerHandler,
     handler::server::wrapper::Parameters,
-    model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo, TextContent},
+    model::{CallToolResult, ContentBlock, ServerCapabilities, ServerInfo},
     tool, tool_handler, tool_router,
     transport::{
         StreamableHttpService, streamable_http_server::session::local::LocalSessionManager,
@@ -75,8 +75,8 @@ impl McpServer {
     ) -> Result<(), std::io::Error> {
         let listener = tokio::net::TcpListener::bind(config.listen_addr.clone()).await?;
 
-        // TODO: Proper logging
-        println!("Server listening to {}", config.listen_addr);
+        log::info!("Server listening to {config.listen_addr}");
+
         Self::listen(listener, context).await;
 
         return Ok(());
@@ -93,7 +93,7 @@ impl McpServer {
         loop {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
-                    println!("Ctrl+C received, shutting down...");
+                    log::info!("Ctrl+C received, shutting down...");
                     break;
                 }
                 accept = listener.accept() => {
@@ -102,7 +102,8 @@ impl McpServer {
                             Self::accept(stream, context.clone(), session_manager.clone());
                         }
                         Err(e) => {
-                            eprintln!("Accept error: {:?}", e);
+                            let error = e.to_string();
+                            log::error!("Accept error: {error}");
                         }
                     }
                 }
@@ -132,8 +133,9 @@ impl McpServer {
                 .serve_connection(io, service)
                 .await;
 
-            if conn.is_err() {
-                eprintln!("Connection error: {:?}", conn.unwrap_err());
+            if let Err(error) = conn {
+                let error = error.to_string();
+                log::error!("Connection error: {error}");
             }
         });
     }
@@ -178,9 +180,8 @@ impl McpServer {
                     ContentBlock::text(result.content.unwrap_or(String::from("No content")));
 
                 return Ok(CallToolResult::success(vec![content]));
-            } else {
-                let content =
-                    ContentBlock::text(format!("Error: {}", result.unwrap_err().to_string()));
+            } else if let Err(error) = result {
+                let content = ContentBlock::text(format!("Error: {}", error.to_string()));
 
                 return Ok(CallToolResult::error(vec![content]));
             }

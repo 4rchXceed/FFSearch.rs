@@ -18,7 +18,7 @@ impl FileIndexerConfig {
     pub fn new() -> Self {
         Self {
             number_of_threads: 6,
-            max_file_size: 1024 * 1024, // 1MB, large files are VERY slow to index
+            max_file_size: 1024 * 1024 * 20, // 1MB, large files are VERY slow to index
             db_config: DatabaseConfig::new(),
         }
     }

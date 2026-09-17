@@ -11,6 +11,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "lancedb",
+ "log",
  "lzma-sys",
  "notify",
  "pdf-extract",

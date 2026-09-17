@@ -94,11 +94,15 @@ async fn test_mcpserver() -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     fserver1.sync().expect("Failed to sync");
     let mut fserver2 = FileIndexer::new(
-        String::from("/run/media/archxceed/MikuMikuLove_LyamZambaz/Tronc_commun/"),
+        String::from(
+            std::env::args()
+                .nth(2)
+                .expect("Please provide a path for the MCP"),
+        ),
         FileIndexerConfig::new(),
     )
     .map_err(|e| e.to_string())?;
-    fserver2.sync().expect("Failed to sync");
+    // fserver2.sync().expect("Failed to sync");
     folders.insert(1, fserver1);
     folders.insert(2, fserver2);
     let folders_threaded = Arc::new(RwLock::new(folders));
@@ -119,6 +123,8 @@ async fn daemon() {
     let mut folders = HashMap::new();
     let mut config = FileIndexerConfig::new();
     config.number_of_threads = 16;
+    let mut daemon_manager = DaemonManager::new().expect("Failed to create daemon manager");
+    daemon_manager.start();
     loop {
         let mut command = String::new();
         print!(">");
@@ -128,8 +134,6 @@ async fn daemon() {
             .expect("Failed to read line");
         let command = command.trim();
         let parts = command.split(" ").collect::<Vec<&str>>();
-        let mut daemon_manager = DaemonManager::new().expect("Failed to create daemon manager");
-        daemon_manager.start();
         if let Some(action) = parts.first() {
             if *action == "/add" {
                 if let Some(path) = parts.get(1) {
@@ -174,6 +178,7 @@ async fn daemon() {
                     println!("ID invalid");
                 }
             } else if *action == "exit" {
+                daemon_manager.stop_daemon().await;
                 break;
             } else {
                 println!("{}: command not found", *action);
@@ -199,7 +204,10 @@ async fn cli() {
         .expect("Failed to read line");
     let index = index.trim().to_string();
     if index == "Y" || index == "y" || index == "" {
+        let start = std::time::Instant::now();
         indexer.sync().expect("Failed to sync indexer");
+        let duration = start.elapsed();
+        println!("Search took: {:?}", duration);
         println!("Indexer synced");
     } else {
         println!("Indexer not synced");
@@ -242,6 +250,7 @@ async fn main() {
         } else if action == "cli" {
             cli().await;
         } else if action == "daemon" {
+            #[cfg(feature = "daemon")]
             daemon().await;
         } else {
             println!("Unknown action: {}", action);
