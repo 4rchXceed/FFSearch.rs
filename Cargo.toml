@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Base
 chrono = "0.4.45"
 tantivy = "0.26.1"
 uuid = {version="1.25.0", features=["v4"]}
@@ -12,6 +13,8 @@ tqdm = "0.8.0"
 thiserror = "2.0.20"
 xberg = { version="1.1.5", features=["excel", "office", "hwp", "hwpx", "iwork", "email", "html", "xml", "archives", "mdx", "svg"] }
 wait = "0.2.6"
+ini = "2.0.0"
+futures = "0.3.34" # Maybe delete this if it's only used in controller.rs
 # Default xberg pdf extractor compilation too slow :(
 pdf-extract = "0.12.0"
 # Feature-specific dep

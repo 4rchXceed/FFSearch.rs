@@ -1,9 +1,9 @@
 /// The default database size
 /// Used by DatabaseConfig::new()
-static DEFAULT_DATABASE_SIZE: usize = 100_000_000;
+pub static DEFAULT_DATABASE_SIZE: usize = 100_000_000;
 /// The default save folder prefix
 /// Used by DatabaseConfig::new()
-static DEFAULT_SAVE_FOLDER_PREFIX: &str = ".ffsearch";
+pub static DEFAULT_SAVE_FOLDER_PREFIX: &str = ".ffsearch";
 /// The database config stores the config for the Searcher/DB Component
 /// It is made of these elements:
 /// - max_db_size: usize -> the maximum size of a database in bytes

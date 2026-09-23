@@ -1,20 +1,19 @@
 use crate::ai::{DEFAULT_PREAMBLE, rag::config::RagConfig};
 
 /// The agent's provider (API/Local)
-/// 3 choices:
+/// 2 choices:
 /// - OpenAI
-/// - Anthropic
 /// - Ollama
+#[derive(Clone)]
 pub enum AgentProvider {
     /// OpenAI API provider (requires API key)
     OpenAI,
-    /// Anthropic API provider (requires API key)
-    Anthropic,
     /// Ollama local model provider (recommended)
     Ollama,
 }
 
 /// Configuration for the AI agent
+#[derive(Clone)]
 pub struct AgentConfig {
     /// The agent's provider (see [`AgentProvider`])
     pub provider: AgentProvider,
@@ -26,6 +25,8 @@ pub struct AgentConfig {
     pub preamble: String,
     /// The RAG configuration to use for the agent
     pub rag_config: RagConfig,
+    /// The provider's API key
+    pub api_key: String,
 }
 
 impl AgentConfig {
@@ -37,6 +38,7 @@ impl AgentConfig {
             think: false,
             preamble: String::from(DEFAULT_PREAMBLE),
             rag_config: rag_config,
+            api_key: String::new(),
         }
     }
 

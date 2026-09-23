@@ -26,6 +26,7 @@ use crate::file_indexer::{config::FileIndexerConfig, indexer::FileIndexer};
 
 #[cfg(feature = "ai")]
 mod ai;
+mod controller;
 #[cfg(feature = "daemon")]
 mod daemon;
 mod file_indexer;
@@ -50,8 +51,12 @@ async fn test_ai() -> Option<ExitCode> {
     let mut ai =
         Agent::new_auto::<rig::providers::ollama::Client, rig::providers::ollama::EmbeddingModel>(
             client,
-            AgentConfig::new("llama3.1:8b", RagConfig::new(), AgentProvider::Ollama),
-            indexer.get_db(),
+            AgentConfig::new(
+                "llama3.1:8b",
+                RagConfig::new(String::from("embeddinggemma:latest")),
+                AgentProvider::Ollama,
+            ),
+            Arc::new(RwLock::new(indexer)),
             model,
         )
         .await
@@ -68,16 +73,19 @@ async fn test_ai() -> Option<ExitCode> {
         if buf == "exit" {
             stop = true;
         } else {
-            let r = ai
-                .send(
-                    buf,
-                    |_, c| {
-                        print!("{}", c);
-                        std::io::stdout().flush().ok();
-                    },
-                    &mut (),
-                )
-                .await;
+            let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+
+            tokio::spawn(async move {
+                loop {
+                    match rx.recv().await {
+                        Some(m) => print!("{}", m),
+                        None => break,
+                    }
+                }
+            });
+
+            let r = ai.send(String::from(buf), tx).await;
+
             if r.is_err() {
                 println!("{:?}", r.unwrap_err());
             }
@@ -89,102 +97,102 @@ async fn test_ai() -> Option<ExitCode> {
 
 #[cfg(feature = "mcp")]
 async fn test_mcpserver() -> Result<(), String> {
-    let mut folders = HashMap::new();
-    let mut fserver1 = FileIndexer::new(String::from("src"), FileIndexerConfig::new())
-        .map_err(|e| e.to_string())?;
-    fserver1.sync().expect("Failed to sync");
-    let mut fserver2 = FileIndexer::new(
-        String::from(
-            std::env::args()
-                .nth(2)
-                .expect("Please provide a path for the MCP"),
-        ),
-        FileIndexerConfig::new(),
-    )
-    .map_err(|e| e.to_string())?;
-    // fserver2.sync().expect("Failed to sync");
-    folders.insert(1, fserver1);
-    folders.insert(2, fserver2);
-    let folders_threaded = Arc::new(RwLock::new(folders));
+    // let mut folders = HashMap::new();
+    // let mut fserver1 = FileIndexer::new(String::from("src"), FileIndexerConfig::new())
+    //     .map_err(|e| e.to_string())?;
+    // fserver1.sync().expect("Failed to sync");
+    // let mut fserver2 = FileIndexer::new(
+    //     String::from(
+    //         std::env::args()
+    //             .nth(2)
+    //             .expect("Please provide a path for the MCP"),
+    //     ),
+    //     FileIndexerConfig::new(),
+    // )
+    // .map_err(|e| e.to_string())?;
+    // // fserver2.sync().expect("Failed to sync");
+    // folders.insert(1, fserver1);
+    // folders.insert(2, fserver2);
+    // let folders_threaded = Arc::new(RwLock::new(folders));
 
-    McpServer::run_server(
-        McpInstancesContext {
-            folders: folders_threaded,
-        },
-        McpServerConfig::new(),
-    )
-    .await
-    .expect("Failed to run the server");
+    // McpServer::run_server(
+    //     McpInstancesContext {
+    //         folders: folders_threaded,
+    //     },
+    //     McpServerConfig::new(),
+    // )
+    // .await
+    // .expect("Failed to run the server");
     return Ok(());
 }
 
 #[cfg(feature = "daemon")]
 async fn daemon() {
-    let mut folders = HashMap::new();
-    let mut config = FileIndexerConfig::new();
-    config.number_of_threads = 16;
-    let mut daemon_manager = DaemonManager::new().expect("Failed to create daemon manager");
-    daemon_manager.start();
-    loop {
-        let mut command = String::new();
-        print!(">");
-        std::io::stdout().flush().expect("Failed to flush");
-        std::io::stdin()
-            .read_line(&mut command)
-            .expect("Failed to read line");
-        let command = command.trim();
-        let parts = command.split(" ").collect::<Vec<&str>>();
-        if let Some(action) = parts.first() {
-            if *action == "/add" {
-                if let Some(path) = parts.get(1) {
-                    let file_indexer = FileIndexer::new(path.to_string(), config.clone())
-                        .expect("Failed to create file indexer");
-                    let arc = Arc::new(RwLock::new(file_indexer));
-                    let id = folders.len().to_string();
-                    println!("ID: {}", id);
-                    folders.insert(id, arc.clone());
-                    daemon_manager.add_folder(path.to_string(), arc).await;
-                }
-            } else if *action == "/rm" {
-                if let Some(path) = parts.get(1) {
-                    daemon_manager.remove_folder(path.to_string()).await;
-                }
-            } else if *action == "/search" {
-                if let Some(id) = parts.get(1) {
-                    if let Some(query) = parts.get(2) {
-                        let limit = parts.get(3).unwrap_or(&"5").parse::<usize>().unwrap_or(5);
+    // let mut folders = HashMap::new();
+    // let mut config = FileIndexerConfig::new();
+    // config.number_of_threads = 16;
+    // let mut daemon_manager = DaemonManager::new().expect("Failed to create daemon manager");
+    // daemon_manager.start();
+    // loop {
+    //     let mut command = String::new();
+    //     print!(">");
+    //     std::io::stdout().flush().expect("Failed to flush");
+    //     std::io::stdin()
+    //         .read_line(&mut command)
+    //         .expect("Failed to read line");
+    //     let command = command.trim();
+    //     let parts = command.split(" ").collect::<Vec<&str>>();
+    //     if let Some(action) = parts.first() {
+    //         if *action == "/add" {
+    //             if let Some(path) = parts.get(1) {
+    //                 let file_indexer = FileIndexer::new(path.to_string(), config.clone())
+    //                     .expect("Failed to create file indexer");
+    //                 let arc = Arc::new(RwLock::new(file_indexer));
+    //                 let id = folders.len().to_string();
+    //                 println!("ID: {}", id);
+    //                 folders.insert(id, arc.clone());
+    //                 daemon_manager.add_folder(path.to_string(), arc).await;
+    //             }
+    //         } else if *action == "/rm" {
+    //             if let Some(path) = parts.get(1) {
+    //                 daemon_manager.remove_folder(path.to_string()).await;
+    //             }
+    //         } else if *action == "/search" {
+    //             if let Some(id) = parts.get(1) {
+    //                 if let Some(query) = parts.get(2) {
+    //                     let limit = parts.get(3).unwrap_or(&"5").parse::<usize>().unwrap_or(5);
 
-                        if let Some(folder) = folders.get(&id.to_string()) {
-                            let res = folder
-                                .read()
-                                .await
-                                .get_db_ro()
-                                .search(String::from(*query), limit);
-                            if let Ok(results) = res {
-                                for (i, result) in results.iter().enumerate() {
-                                    println!("{}: {}", i + 1, result.path);
-                                }
-                            } else if let Err(error) = res {
-                                println!("Error while searching: {}", error.to_string());
-                            }
-                            println!("Search complete");
-                        } else {
-                            println!("Cannot find folder");
-                        }
-                    } else {
-                        println!("Query invalid");
-                    }
-                } else {
-                    println!("ID invalid");
-                }
-            } else if *action == "exit" {
-                daemon_manager.stop_daemon().await;
-                break;
-            } else {
-                println!("{}: command not found", *action);
-            }
-        }
-    }
+    //                     if let Some(folder) = folders.get(&id.to_string()) {
+    //                         let res = folder
+    //                             .read()
+    //                             .await
+    //                             .get_db_ro()
+    //                             .search(String::from(*query), limit);
+    //                         if let Ok(results) = res {
+    //                             for (i, result) in results.iter().enumerate() {
+    //                                 println!("{}: {}", i + 1, result.path);
+    //                             }
+    //                         } else if let Err(error) = res {
+    //                             println!("Error while searching: {}", error.to_string());
+    //                         }
+    //                         println!("Search complete");
+    //                     } else {
+    //                         println!("Cannot find folder");
+    //                     }
+    //                 } else {
+    //                     println!("Query invalid");
+    //                 }
+    //             } else {
+    //                 println!("ID invalid");
+    //             }
+    //         } else if *action == "exit" {
+    //             daemon_manager.stop_daemon().await;
+    //             break;
+    //         } else {
+    //             println!("{}: command not found", *action);
+    //         }
+    //     }
+    // }
 }
 
 async fn cli() {

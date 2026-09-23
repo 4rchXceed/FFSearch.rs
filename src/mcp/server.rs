@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -19,7 +19,7 @@ use tokio::{
     sync::RwLock,
 };
 
-use crate::{file_indexer::indexer::FileIndexer, mcp::config::McpServerConfig};
+use crate::{controller::controller::Controller, mcp::config::McpServerConfig};
 
 /// Search request tool
 /// There's 3 parameters:
@@ -52,7 +52,7 @@ struct GetContentRequest {
 #[derive(Clone)]
 pub struct McpInstancesContext {
     /// Thread-Safe reference to the sync folders
-    pub folders: Arc<RwLock<HashMap<i32, FileIndexer>>>,
+    pub controller: Arc<RwLock<Controller>>,
 }
 
 /// The McpServer the the main MCP class
@@ -75,7 +75,9 @@ impl McpServer {
     ) -> Result<(), std::io::Error> {
         let listener = tokio::net::TcpListener::bind(config.listen_addr.clone()).await?;
 
-        log::info!("Server listening to {config.listen_addr}");
+        let listen_addr = config.listen_addr;
+
+        log::info!("Server listening to {listen_addr}");
 
         Self::listen(listener, context).await;
 
@@ -155,8 +157,15 @@ impl McpServer {
     async fn list_folders(&self) -> Result<CallToolResult, ErrorData> {
         let mut paths = Vec::new();
 
-        for (id, folder) in self.context.folders.read().await.iter() {
-            paths.push(format!("{}: {}", id, folder.get_db_ro().get_index_path()));
+        for (id, folder_path) in self
+            .context
+            .controller
+            .read()
+            .await
+            .get_file_indexers()
+            .await
+        {
+            paths.push(format!("{}: {}", id, folder_path));
         }
 
         let content = ContentBlock::text(paths.join(", "));
@@ -169,26 +178,37 @@ impl McpServer {
         &self,
         Parameters(GetContentRequest { folder_id, path }): Parameters<GetContentRequest>,
     ) -> Result<CallToolResult, ErrorData> {
-        let folders = self.context.folders.read().await;
-        let indexer = folders.get(&folder_id);
+        let folder_controller = self
+            .context
+            .controller
+            .read()
+            .await
+            .get_controller_for(folder_id as u32);
 
-        if let Some(indexer) = indexer {
-            let result = indexer.get_db_ro().get(path);
+        match folder_controller {
+            Ok(controller) => {
+                let result = controller.get_content(path).await;
 
-            if let Ok(result) = result {
-                let content =
-                    ContentBlock::text(result.content.unwrap_or(String::from("No content")));
+                if let Ok(result) = result {
+                    let content =
+                        ContentBlock::text(result.content.unwrap_or(String::from("No content")));
 
-                return Ok(CallToolResult::success(vec![content]));
-            } else if let Err(error) = result {
-                let content = ContentBlock::text(format!("Error: {}", error.to_string()));
+                    return Ok(CallToolResult::success(vec![content]));
+                } else if let Err(error) = result {
+                    let content = ContentBlock::text(format!("Error: {}", error.to_string()));
 
-                return Ok(CallToolResult::error(vec![content]));
+                    return Ok(CallToolResult::error(vec![content]));
+                } else {
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(
+                        String::from("Unknown error"),
+                    )]));
+                }
             }
-        } else {
-            let error_text = format!("Folder with id {} not found", folder_id);
+            Err(e) => {
+                let error_text = format!("Error: {}", e);
 
-            return Ok(CallToolResult::error(vec![ContentBlock::text(error_text)]));
+                return Ok(CallToolResult::error(vec![ContentBlock::text(error_text)]));
+            }
         }
     }
 
@@ -202,12 +222,16 @@ impl McpServer {
             limit,
         }): Parameters<SearchRequest>,
     ) -> Result<CallToolResult, ErrorData> {
-        let folders = self.context.folders.read().await;
-        let indexer = folders.get(&folder_id);
+        let folder_controller = self
+            .context
+            .controller
+            .read()
+            .await
+            .get_controller_for(folder_id as u32);
 
-        match indexer {
-            Some(indexer) => {
-                let search_results = indexer.get_db_ro().search(query, limit);
+        match folder_controller {
+            Ok(controller) => {
+                let search_results = controller.search(query, limit).await;
 
                 match search_results {
                     Err(error) => {
@@ -234,9 +258,8 @@ impl McpServer {
                     }
                 }
             }
-            None => {
-                let error_text =
-                    ContentBlock::text(format!("Folder with id {} not found", folder_id));
+            Err(e) => {
+                let error_text = ContentBlock::text(format!("Error: {}", e));
 
                 return Ok(CallToolResult::error(vec![error_text]));
             }

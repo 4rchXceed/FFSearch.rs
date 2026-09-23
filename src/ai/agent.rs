@@ -1,8 +1,9 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use crate::{
     ai::{config::AgentConfig, rag::storage::RagStorage},
-    searcher::database::{Database, DatabaseError},
+    file_indexer::indexer::FileIndexer,
+    searcher::database::DatabaseError,
     utils::join_path,
 };
 use rig::{
@@ -14,6 +15,7 @@ use rig::{
 };
 use serde_json::json;
 use thiserror::Error;
+use tokio::sync::{RwLock, mpsc::Sender};
 use tokio_stream::StreamExt;
 
 /// These are all the errors that can occur for the AI component.
@@ -68,7 +70,7 @@ impl Agent {
     /// Parameters:
     /// - client: The connection client
     /// - config: The agent configuration (see AgentConfig)
-    /// - db: The database connection
+    /// - indexer: An Arc ref to the file indexer
     /// - embedding_model: The embedding model to use for RAG storage
     ///
     /// Returns:
@@ -79,48 +81,100 @@ impl Agent {
     >(
         client: T,
         config: AgentConfig,
-        db: &mut Database,
+        indexer: Arc<RwLock<FileIndexer>>,
         embedding_model: Model,
     ) -> Result<Self, AIError> {
-        if Path::new(&join_path(&db.get_index_path(), "embeddings")).exists() {
-            return Self::new_load_storage(client, config, db, embedding_model).await;
+        let indexer_path = indexer.read().await.get_db_ro().get_index_path();
+
+        if Path::new(&join_path(&indexer_path, "embeddings")).exists() {
+            return Self::new_load_storage(client, config, indexer_path, embedding_model).await;
         } else {
-            return Self::new_create_storage(client, config, db, embedding_model).await;
+            return Self::new_create_storage(
+                client,
+                config,
+                indexer,
+                indexer_path,
+                embedding_model,
+            )
+            .await;
         }
     }
 
+    /// Loads the embeddings & creates the rag from an existing folder
+    ///
+    /// Type parameters:
+    /// - "T": The agent client type (example rig::provider::ollama::Client)
+    /// - "Model": The embedding model type (example rig::provider::ollama::EmbeddingModel)
+    ///
+    /// Parameters:
+    /// - client: The rig client
+    /// - config: The agent's config
+    /// - index_path: the embeddings path
+    /// - embedding_model: the embeddings model
+    ///
+    /// Returns:
+    /// - Result<Self, AIError>: the result of the operation
     pub async fn new_load_storage<
         T: AgentClientExt + EmbeddingsClient + 'static,
         Model: EmbeddingModel + Clone + Send + Sync + 'static,
     >(
         client: T,
         config: AgentConfig,
-        db: &mut Database,
+        index_path: String,
         embedding_model: Model,
     ) -> Result<Self, AIError> {
-        let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
+        let mut rag_storage = RagStorage::new(index_path, embedding_model).await?;
 
         rag_storage.load_index().await?;
 
         return Self::new_from_rag(client, config, rag_storage);
     }
 
+    /// Creates the embeddings from a file indexer / database
+    ///
+    /// Type parameters:
+    /// - "T": The agent client type (example rig::provider::ollama::Client)
+    /// - "Model": The embedding model type (example rig::provider::ollama::EmbeddingModel)
+    ///
+    /// Parameters:
+    /// - client: The rig client
+    /// - config: The agent's config
+    /// - indexer: An Arc ref to the file indexer
+    /// - index_path: the embeddings path
+    /// - embedding_model: the embeddings model
+    ///
+    /// Returns:
+    /// - Result<Self, AIError>: the result of the operation
     pub async fn new_create_storage<
         T: AgentClientExt + EmbeddingsClient + 'static,
         Model: EmbeddingModel + Clone + Send + Sync + 'static,
     >(
         client: T,
         config: AgentConfig,
-        db: &mut Database,
+        indexer: Arc<RwLock<FileIndexer>>,
+        index_path: String,
         embedding_model: Model,
     ) -> Result<Self, AIError> {
-        let mut rag_storage = RagStorage::new(db.get_index_path().clone(), embedding_model).await?;
+        let mut rag_storage = RagStorage::new(index_path, embedding_model).await?;
 
-        rag_storage.init_from_db(db).await?;
+        rag_storage.init_from_db(indexer).await?;
 
         return Self::new_from_rag(client, config, rag_storage);
     }
 
+    /// Creates the Agent from a already existing RAG
+    ///
+    /// Type parameters:
+    /// - "T": The agent client type (example rig::provider::ollama::Client)
+    /// - "Model": The embedding model type (example rig::provider::ollama::EmbeddingModel)
+    ///
+    /// Parameters:
+    /// - client: the rig client
+    /// - config: the agent's config
+    /// - storage: the RAG
+    ///
+    /// Returns:
+    /// - Result(Self, AIError): the result of the operation
     fn new_from_rag<
         T: AgentClientExt + EmbeddingsClient + 'static,
         Model: EmbeddingModel + Clone + Send + Sync + 'static,
@@ -159,25 +213,22 @@ impl Agent {
     /// Returns:
     /// - Ok(()) if the response was successfully streamed
     /// - Err(AIError) if an error occurred (see AIError)
-    pub async fn send<This>(
-        &mut self,
-        message: &str,
-        mut callback: impl FnMut(&mut This, String) + Send + 'static,
-        this: &mut This,
-    ) -> Result<(), AIError> {
+    pub async fn send(&mut self, message: String, sender: Sender<String>) -> Result<(), AIError> {
         let mut response = self.agent.stream_chat(message, &self.messages).await;
         while let Some(chunk) = response.next().await {
             match chunk {
                 Ok(msg) => {
-                    callback(
-                        this,
-                        match msg {
+                    if let Err(_) = sender
+                        .send(match msg {
                             MultiTurnStreamItem::StreamAssistantItem(
                                 StreamedAssistantContent::Text(text),
                             ) => text.text,
                             _ => String::new(),
-                        },
-                    );
+                        })
+                        .await
+                    {
+                        break; // RX disconnected, we stop else we'll send these messages in the VOID
+                    }
                 }
                 Err(e) => {
                     return Err(AIError::StreamError(e));

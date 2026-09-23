@@ -409,13 +409,6 @@ impl Database {
             .map(|doc| doc.unwrap())
             .collect());
     }
-
-    pub fn close(self) -> Result<(), DatabaseError> {
-        self.index_writer
-            .wait_merging_threads()
-            .map_err(|e| DatabaseError::IndexCloseError(e))?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -546,7 +539,9 @@ mod tests {
         );
         database.commit().unwrap();
         let temp_dir_path = temp_dir.path().to_str().unwrap().to_string();
-        assert!(database.close().is_ok());
+
+        drop(database);
+
         let database2 = Database::new(String::from(temp_dir_path), DatabaseConfig::new());
 
         assert!(database2.is_ok());

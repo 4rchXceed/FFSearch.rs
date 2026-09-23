@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use tokio::sync::{RwLock, mpsc::Sender};
+use tokio::sync::{
+    RwLock,
+    mpsc::{Sender, error::SendError},
+};
 
 use crate::{
+    controller::controller::LockedController,
     daemon::worker::{DaemonEvent, DaemonWorker},
-    file_indexer::indexer::FileIndexer,
 };
 
 /// This struct is the main class for stopping / starting a daemon
@@ -24,8 +27,8 @@ impl DaemonManager {
     /// Returns:
     /// - Ok(Self): if everything went as planned
     /// - Err(String): an Error, String => the error
-    pub fn new() -> Result<Self, String> {
-        let (worker, sender) = DaemonWorker::new()?;
+    pub fn new(controller: LockedController) -> Result<Self, String> {
+        let (worker, sender) = DaemonWorker::new(controller)?;
 
         return Ok(Self {
             daemon: Arc::new(RwLock::new(worker)),
@@ -57,17 +60,9 @@ impl DaemonManager {
     /// - file_indexer: an Arc with the File Indexer element
     ///
     /// Returns:
-    /// - bool: true => OK, false => Could not create the folder (the daemon is probably stopped/crashed)
-    pub async fn add_folder(
-        &mut self,
-        folder: String,
-        file_indexer: Arc<RwLock<FileIndexer>>,
-    ) -> bool {
-        return self
-            .sender
-            .send(DaemonEvent::Add(folder, file_indexer))
-            .await
-            .is_ok();
+    /// - Result<(), SendError<DaemonEvent>>: The result if there's any errors
+    pub async fn add_folder(&mut self, folder: String) -> Result<(), SendError<DaemonEvent>> {
+        return self.sender.send(DaemonEvent::Add(folder)).await;
     }
 
     /// Unwatches a folder
@@ -75,21 +70,21 @@ impl DaemonManager {
     /// - folder: the **ABSOLUE** path to the folder that needs to be unwatched
     ///
     /// Returns:
-    /// - bool: true => OK, false => Could not create the folder (the daemon is probably stopped/crashed)
-    pub async fn remove_folder(&mut self, folder: String) -> bool {
-        return self.sender.send(DaemonEvent::Remove(folder)).await.is_ok();
+    /// - Result<(), SendError<DaemonEvent>>: The result if there's any errors
+    pub async fn remove_folder(&mut self, folder: String) -> Result<(), SendError<DaemonEvent>> {
+        return self.sender.send(DaemonEvent::Remove(folder)).await;
     }
 
     /// Stops the daemon, using the kill switch mpsc channel
-    pub async fn stop_daemon(&mut self) -> bool {
+    pub async fn stop_daemon(&mut self) -> Result<(), ()> {
         if let Some(killer) = self.killer.as_ref() {
             if killer.send(()).await.is_ok() {
-                return true;
+                return Ok(());
             } else {
-                return false;
+                return Err(());
             }
         } else {
-            return false;
+            return Err(());
         }
     }
 }
@@ -101,7 +96,7 @@ mod tests {
     use tempdir::TempDir;
     use tokio::{fs, io::AsyncWriteExt, time::sleep};
 
-    use crate::file_indexer::config::FileIndexerConfig;
+    use crate::controller::controller::Controller;
 
     use super::*;
 
@@ -112,15 +107,20 @@ mod tests {
             .path()
             .to_string_lossy()
             .to_string();
-        let indexer = FileIndexer::new(indexer_temp_dir.clone(), FileIndexerConfig::new())
-            .expect("Indexer failed");
 
-        let arc = Arc::new(RwLock::new(indexer));
-        let mut manager = DaemonManager::new().expect("Failed to create manager");
+        let mut controller =
+            Controller::new(format!("{}{}config.ini", indexer_temp_dir, MAIN_SEPARATOR))
+                .expect("Failed to create controller");
 
-        manager
-            .add_folder(indexer_temp_dir.clone(), arc.clone())
-            .await;
+        let indexer_id = controller
+            .add_file_indexer(indexer_temp_dir.clone())
+            .expect("Failed to create indexer");
+
+        let arc = Arc::new(RwLock::new(controller));
+
+        let mut manager = DaemonManager::new(arc.clone()).expect("Failed to create manager");
+
+        manager.add_folder(indexer_temp_dir.clone()).await;
 
         manager.start();
 
@@ -133,7 +133,13 @@ mod tests {
 
         let mut tries = 0;
         loop {
-            let file1 = arc.read().await.get_db_ro().get(String::from("file1.txt"));
+            let file1 = arc
+                .read()
+                .await
+                .get_controller_for(indexer_id)
+                .expect("Failed to get controller")
+                .get_content(String::from("file1.txt"))
+                .await;
             if let Ok(file1) = file1
                 && file1.content == Some(String::from("Hello World~"))
             {
@@ -152,7 +158,14 @@ mod tests {
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
         println!("{}", indexer_temp_dir);
-        let file1 = arc.read().await.get_db_ro().get(String::from("file1.txt"));
+        let file1 = arc
+            .read()
+            .await
+            .get_controller_for(indexer_id)
+            .expect("Failed to get controller")
+            .get_content(String::from("file1.txt"))
+            .await;
+
         assert!(file1.is_err());
 
         manager.remove_folder(indexer_temp_dir.clone()).await;
@@ -164,12 +177,14 @@ mod tests {
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
-        let file1 = arc.read().await.get_db_ro().get(String::from("file1.txt"));
-        assert!(file1.is_err());
-
-        manager
-            .add_folder(indexer_temp_dir.clone(), arc.clone())
+        let file1 = arc
+            .read()
+            .await
+            .get_controller_for(indexer_id)
+            .expect("Failed to get controller")
+            .get_content(String::from("file1.txt"))
             .await;
+        assert!(file1.is_err());
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
@@ -184,7 +199,13 @@ mod tests {
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
-        let file2 = arc.read().await.get_db_ro().get(String::from("file2.txt"));
+        let file2 = arc
+            .read()
+            .await
+            .get_controller_for(indexer_id)
+            .expect("Failed to get controller")
+            .get_content(String::from("file2.txt"))
+            .await;
         assert!(file2.is_err());
     }
 }

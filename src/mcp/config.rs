@@ -1,4 +1,4 @@
-static DEFAULT_LISTEN_ADDR: &str = "localhost:8080";
+pub static DEFAULT_LISTEN_ADDR: &str = "localhost:8080";
 
 pub struct McpServerConfig {
     pub listen_addr: String,

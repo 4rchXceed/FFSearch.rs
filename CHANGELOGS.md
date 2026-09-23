@@ -44,3 +44,13 @@
 + Proper logging
 + Small README
 + LOGOOO!
+
+## Last commit: 8606dce4aae6bbff38cd80fe76f111e7172d7499
++ Added settings struct with saving/loading settings to an INI file
++ Unittests for the settings
++ Added controller struct to manage the whole app, (so every component share the same "state")
++ Using the controller instead of Arc in:
+  - Daemon
+  - MCP
+TODO: Unittests for controller
+TODO: Re-wrote the manual tests in main

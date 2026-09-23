@@ -387,6 +387,14 @@ impl FileIndexer {
     pub fn get_db_ro(&self) -> &Database {
         return &self.db;
     }
+
+    /// Gets the sync folder
+    ///
+    /// Returns:
+    /// - a clone of the folder path (as String)
+    pub fn get_folder(&self) -> String {
+        return self.folder.clone();
+    }
 }
 
 #[cfg(test)]

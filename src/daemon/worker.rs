@@ -1,19 +1,19 @@
 use log::error;
 use std::path::MAIN_SEPARATOR_STR;
-use std::{collections::HashMap, path::Path};
+use std::path::Path;
 
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
-use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
-use tokio::sync::{RwLock, mpsc::Sender};
+use tokio::sync::mpsc::Sender;
 
-use crate::file_indexer::indexer::{FileIndexer, FileOperationNeeded};
+use crate::controller::controller::LockedController;
+use crate::file_indexer::indexer::FileOperationNeeded;
 use crate::utils::trim_custom;
 
 /// This represents an event that the DaemonManager sends to the DaemonWorker
 pub enum DaemonEvent {
     /// Adds a folder, from it's path and a ref to the FileIndexer
-    Add(String, Arc<RwLock<FileIndexer>>),
+    Add(String),
     /// Removes a folder, from it's path
     Remove(String),
 }
@@ -22,8 +22,8 @@ pub enum DaemonEvent {
 ///
 /// This struct represents a worker (background job) that will listen to file events in multiple folders, and write the changes into the FileIndexer if needed.
 pub struct DaemonWorker {
-    /// The folders (paths) linked to their FileIndexer instances
-    folders: HashMap<String, Arc<RwLock<FileIndexer>>>,
+    /// A ref to the controller
+    controller: LockedController,
     /// The FS Event receiver
     rx: Receiver<notify::Result<notify::Event>>,
     /// The Daemon Event receiver (see Daemon Event's description)
@@ -42,7 +42,7 @@ impl DaemonWorker {
     /// Returns:
     /// - Ok((Self {...}, Sender<DaemonEvent>)): A DaemonWorker instance and a DaemonEvent mpsc event
     /// - Err(String): The error
-    pub fn new() -> Result<(Self, Sender<DaemonEvent>), String> {
+    pub fn new(controller: LockedController) -> Result<(Self, Sender<DaemonEvent>), String> {
         let (tx, rx) = tokio::sync::mpsc::channel::<notify::Result<notify::Event>>(100);
         let (tx_event, rx_event) = tokio::sync::mpsc::channel::<DaemonEvent>(100);
 
@@ -56,7 +56,7 @@ impl DaemonWorker {
 
         return Ok((
             Self {
-                folders: HashMap::new(),
+                controller: controller,
                 rx: rx,
                 rx_event: rx_event,
                 watcher: watcher,
@@ -74,13 +74,17 @@ impl DaemonWorker {
     /// Returns:
     /// - String: the clean relative path
     /// - &Arc<RwLock<FileIndexer>>: the Arc reference to the FileIndexer
-    fn get_from_path(&self, path: &String) -> Option<(String, &Arc<RwLock<FileIndexer>>)> {
+    async fn get_from_path(&self, path: &String) -> Option<(u32, String)> {
         return self
-            .folders
+            .controller
+            .read()
+            .await
+            .get_file_indexers()
+            .await
             .iter()
-            .find(|(f, _)| path.starts_with(f.as_str()))
-            .map(|(f, i)| (path.strip_prefix(f).unwrap_or(path.as_str()).to_string(), i))
-            .map(|(f, i)| (trim_custom(f, MAIN_SEPARATOR_STR), i)); // Avoid having something like \file1.txt or /file1.txt
+            .find(|(_, f)| path.starts_with(f.as_str()))
+            .map(|(i, f)| (i, path.strip_prefix(f).unwrap_or(path.as_str()).to_string()))
+            .map(|(i, f)| (*i, trim_custom(f, MAIN_SEPARATOR_STR))); // Avoid having something like \file1.txt or /file1.txt
     }
 
     /// Adds a folder to the watched folders
@@ -94,16 +98,10 @@ impl DaemonWorker {
     /// Returns:
     /// - Ok(()): ok
     /// - Err(String): error  with the string of
-    pub fn add_folder(
-        &mut self,
-        folder: String,
-        indexer: Arc<RwLock<FileIndexer>>,
-    ) -> Result<(), String> {
+    pub fn add_folder(&mut self, folder: String) -> Result<(), String> {
         if !Path::new(&folder).is_absolute() {
             return Err(String::from("Path MUST be absolute"));
         }
-
-        self.folders.insert(folder.clone(), indexer);
 
         self.watcher
             .watch(&Path::new(&folder), RecursiveMode::Recursive)
@@ -123,8 +121,6 @@ impl DaemonWorker {
         self.watcher
             .unwatch(&Path::new(&folder))
             .map_err(|e| e.to_string())?;
-
-        self.folders.remove(&folder);
 
         return Ok(());
     }
@@ -152,7 +148,7 @@ impl DaemonWorker {
     fn handle_manager_event(&mut self, event: Option<DaemonEvent>) {
         let error = match event {
             Some(event) => match event {
-                DaemonEvent::Add(folder, indexer) => self.add_folder(folder, indexer),
+                DaemonEvent::Add(folder) => self.add_folder(folder),
                 DaemonEvent::Remove(folder) => self.remove_folder(folder),
             },
             None => Ok(()),
@@ -173,9 +169,9 @@ impl DaemonWorker {
                 Ok(event) => {
                     for path in &event.paths {
                         let path = path.to_string_lossy().to_string();
-                        let folder = self.get_from_path(&path);
+                        let folder = self.get_from_path(&path).await;
                         if let Some((db_path, folder)) = folder {
-                            process_event(&event, &path, db_path, folder).await;
+                            self.process_event(&event, &path, folder, db_path).await;
                         } else {
                             error!("File {path} watched, but not in the watch folders");
                         }
@@ -189,69 +185,66 @@ impl DaemonWorker {
             None => {}
         }
     }
-}
 
-/// This processes an FS event by adding it to the FileIndexer
-///
-/// Parameters:
-/// - event: the FS event
-/// - path: the absolute path to the file
-/// - db_path: the path of the file RELATIVE to the FileIndexer
-/// - indexer: the file indexer
-async fn process_event(
-    event: &notify::Event,
-    path: &String,
-    db_path: String,
-    indexer: &Arc<RwLock<FileIndexer>>,
-) {
-    let mut folder_write = indexer.write().await;
-    // Check if it's not the system folder
-    let error = if !path.starts_with(&folder_write.get_db_ro().get_index_path()) {
-        if event.kind.is_modify() || event.kind.is_create() {
-            // Already exists
-            if folder_write.get_db_ro().get(db_path).is_ok() {
-                folder_write
-                    .index(path.clone(), FileOperationNeeded::Update)
-                    .await
-            // Doesn't exists
+    /// This processes an FS event by adding it to the FileIndexer
+    ///
+    /// Parameters:
+    /// - event: the FS event
+    /// - path: the absolute path to the file
+    /// - db_path: the path of the file RELATIVE to the FileIndexer
+    /// - indexer: the file indexer
+    async fn process_event(
+        &self,
+        event: &notify::Event,
+        path: &String,
+        db_path: String,
+        indexer_uid: u32,
+    ) {
+        let controller = self.controller.read().await.get_controller_for(indexer_uid);
+        if let Ok(controller) = controller {
+            // Check if it's not the system folder
+            let error = if !path.starts_with(&controller.get_db_path().await) {
+                if event.kind.is_modify() || event.kind.is_create() {
+                    // Already exists
+                    if controller.get_content(db_path).await.is_ok() {
+                        controller
+                            .index_file_change(path.clone(), FileOperationNeeded::Update)
+                            .await
+                    // Doesn't exists
+                    } else {
+                        controller
+                            .index_file_change(path.clone(), FileOperationNeeded::Add)
+                            .await
+                    }
+                } else if event.kind.is_remove() {
+                    controller
+                        .remove_document(db_path)
+                        .await
+                        .map_err(|e| e.to_string())
+                        .err()
+                } else {
+                    None
+                }
             } else {
-                folder_write
-                    .index(path.clone(), FileOperationNeeded::Add)
-                    .await
+                None
+            };
+            if let Some(error) = error {
+                error!("Error while indexing {path}: {error}");
             }
-        } else if event.kind.is_remove() {
-            let mut error = folder_write
-                .get_db()
-                .remove_document(db_path)
-                .map_err(|e| e.to_string())
-                .err();
-            if error.is_none() {
-                error = folder_write
-                    .get_db()
-                    .commit()
-                    .map_err(|e| e.to_string())
-                    .err();
-            }
-            error
         } else {
-            None
+            error!("Folder with id: {indexer_uid} not found!");
         }
-    } else {
-        None
-    };
-    if let Some(error) = error {
-        error!("Error while indexing {path}: {error}");
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{path::MAIN_SEPARATOR, time::Duration};
+    use std::{path::MAIN_SEPARATOR, sync::Arc, time::Duration};
 
     use tempdir::TempDir;
-    use tokio::{fs, io::AsyncWriteExt, time::sleep};
+    use tokio::{fs, io::AsyncWriteExt, sync::RwLock, time::sleep};
 
-    use crate::file_indexer::config::FileIndexerConfig;
+    use crate::controller::controller::Controller;
 
     use super::*;
 
@@ -263,19 +256,27 @@ mod tests {
             .to_string_lossy()
             .to_string();
 
-        let indexer = FileIndexer::new(indexer_temp_dir.clone(), FileIndexerConfig::new())
-            .expect("Indexer failed");
-
-        let arc = Arc::new(RwLock::new(indexer));
-        let arc_new = arc.clone();
-
         let indexer_temp_dir_new = indexer_temp_dir.clone();
 
+        let mut controller = Controller::new(format!(
+            "{}{}config.ini",
+            indexer_temp_dir_new, MAIN_SEPARATOR
+        ))
+        .expect("Failed to create the controller");
+
+        let folder_id = controller
+            .add_file_indexer(indexer_temp_dir.clone())
+            .expect("Failed to create file indexer");
+
+        let controller = Arc::new(RwLock::new(controller));
+        let arc_new = controller.clone();
+
         let th = tokio::spawn(async move {
-            let (mut worker, event_sender) = DaemonWorker::new().expect("Failed to create Daemon");
+            let (mut worker, event_sender) =
+                DaemonWorker::new(controller).expect("Failed to create Daemon");
 
             event_sender
-                .send(DaemonEvent::Add(indexer_temp_dir.clone(), arc.clone()))
+                .send(DaemonEvent::Add(indexer_temp_dir.clone()))
                 .await
                 .expect("Failed to send add folder");
 
@@ -299,8 +300,10 @@ mod tests {
             let file1 = arc_new
                 .read()
                 .await
-                .get_db_ro()
-                .get(String::from("file1.txt"));
+                .get_controller_for(folder_id)
+                .expect("Failed to get controller for folder")
+                .get_content(String::from("file1.txt"))
+                .await;
 
             if let Ok(file1) = file1
                 && file1.content == Some(String::from("Hello World~"))
