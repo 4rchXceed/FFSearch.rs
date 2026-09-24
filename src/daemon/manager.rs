@@ -102,6 +102,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_worker_single_folder() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let indexer_temp_dir = TempDir::new("ffsearch_test")
             .expect("Tempdir failed")
             .path()
@@ -118,11 +122,22 @@ mod tests {
 
         let arc = Arc::new(RwLock::new(controller));
 
+        // ---------------------------------------
+        // Tests add_folder and start
+        // ---------------------------------------
+
         let mut manager = DaemonManager::new(arc.clone()).expect("Failed to create manager");
 
-        manager.add_folder(indexer_temp_dir.clone()).await;
+        manager
+            .add_folder(indexer_temp_dir.clone())
+            .await
+            .expect("Failed to add the folder");
 
         manager.start();
+
+        // ---------------------------------------
+        // Tests adding a file
+        // ---------------------------------------
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
@@ -136,11 +151,11 @@ mod tests {
             let file1 = arc
                 .read()
                 .await
-                .get_controller_for(indexer_id)
+                .get_controller_for(indexer_id, arc.clone())
                 .expect("Failed to get controller")
                 .get_content(String::from("file1.txt"))
                 .await;
-            if let Ok(file1) = file1
+            if let Some(Ok(file1)) = file1
                 && file1.content == Some(String::from("Hello World~"))
             {
                 break;
@@ -152,6 +167,10 @@ mod tests {
             sleep(Duration::from_millis(500)).await; // TODO: Maybe find a better way to do it?
         }
 
+        // ---------------------------------------
+        // Tests removing a file
+        // ---------------------------------------
+
         remove_file(format!("{}{}file1.txt", indexer_temp_dir, MAIN_SEPARATOR))
             .expect("Failed to remove file");
 
@@ -161,14 +180,22 @@ mod tests {
         let file1 = arc
             .read()
             .await
-            .get_controller_for(indexer_id)
+            .get_controller_for(indexer_id, arc.clone())
             .expect("Failed to get controller")
             .get_content(String::from("file1.txt"))
-            .await;
+            .await
+            .expect("Indexer deleted");
 
         assert!(file1.is_err());
 
-        manager.remove_folder(indexer_temp_dir.clone()).await;
+        // ---------------------------------------
+        // Tests remove_folder()
+        // ---------------------------------------
+
+        manager
+            .remove_folder(indexer_temp_dir.clone())
+            .await
+            .expect("Failed to remove the folder");
 
         let mut file = fs::File::create(format!("{}{}file1.txt", indexer_temp_dir, MAIN_SEPARATOR))
             .await
@@ -180,15 +207,24 @@ mod tests {
         let file1 = arc
             .read()
             .await
-            .get_controller_for(indexer_id)
+            .get_controller_for(indexer_id, arc.clone())
             .expect("Failed to get controller")
             .get_content(String::from("file1.txt"))
-            .await;
+            .await
+            .expect("Indexer deleted");
+
         assert!(file1.is_err());
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
-        manager.stop_daemon().await;
+        // ---------------------------------------
+        // Tests stop_daemon()
+        // ---------------------------------------
+
+        manager
+            .stop_daemon()
+            .await
+            .expect("Failed to stop the daemon");
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
@@ -202,10 +238,12 @@ mod tests {
         let file2 = arc
             .read()
             .await
-            .get_controller_for(indexer_id)
+            .get_controller_for(indexer_id, arc.clone())
             .expect("Failed to get controller")
             .get_content(String::from("file2.txt"))
-            .await;
+            .await
+            .expect("Indexer deleted");
+
         assert!(file2.is_err());
     }
 }

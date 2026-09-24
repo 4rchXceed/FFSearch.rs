@@ -1,8 +1,8 @@
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use crate::{
     ai::{config::AgentConfig, rag::storage::RagStorage},
-    file_indexer::indexer::FileIndexer,
+    controller::controller::FolderController,
     searcher::database::DatabaseError,
     utils::join_path,
 };
@@ -15,7 +15,7 @@ use rig::{
 };
 use serde_json::json;
 use thiserror::Error;
-use tokio::sync::{RwLock, mpsc::Sender};
+use tokio::sync::mpsc::Sender;
 use tokio_stream::StreamExt;
 
 /// These are all the errors that can occur for the AI component.
@@ -47,6 +47,8 @@ pub enum AIError {
     FailedToGetAllDocuments(DatabaseError),
     #[error("Other error: {0}")]
     Other(String),
+    #[error("The file indexer has been deleted while creating the RAG")]
+    IndexerDeleted,
 }
 
 /// Agent is responsible for managing all the AI stuff, such as:
@@ -81,10 +83,10 @@ impl Agent {
     >(
         client: T,
         config: AgentConfig,
-        indexer: Arc<RwLock<FileIndexer>>,
+        indexer: FolderController,
         embedding_model: Model,
     ) -> Result<Self, AIError> {
-        let indexer_path = indexer.read().await.get_db_ro().get_index_path();
+        let indexer_path = indexer.get_db_path().await.ok_or(AIError::IndexerDeleted)?;
 
         if Path::new(&join_path(&indexer_path, "embeddings")).exists() {
             return Self::new_load_storage(client, config, indexer_path, embedding_model).await;
@@ -151,7 +153,7 @@ impl Agent {
     >(
         client: T,
         config: AgentConfig,
-        indexer: Arc<RwLock<FileIndexer>>,
+        indexer: FolderController,
         index_path: String,
         embedding_model: Model,
     ) -> Result<Self, AIError> {

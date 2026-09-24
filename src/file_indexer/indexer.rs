@@ -458,8 +458,17 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_sync_one() {
-        let (mut indexer, tempdir, folder_path) = setup();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
+        let (mut indexer, _tempdir, folder_path) = setup();
         generate_test_datas(folder_path.as_str());
+
+        // ---------------------------------------
+        // Tests sync() and get()
+        // ---------------------------------------
+
         let errors = indexer.sync().unwrap();
         assert!(errors.is_empty());
 
@@ -481,14 +490,21 @@ mod tests {
             DatabaseError::NoResult => true,
             _ => false,
         });
-
-        let _ = tempdir.close();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_sync_two() {
-        let (mut indexer, tempdir, folder_path) = setup();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
+        let (mut indexer, _tempdir, folder_path) = setup();
         generate_test_datas(folder_path.as_str());
+
+        // ---------------------------------------
+        // Tests sync()
+        // ---------------------------------------
+
         let errors = indexer.sync().unwrap();
         assert!(errors.is_empty());
 
@@ -496,29 +512,37 @@ mod tests {
 
         let path = OsString::from_str(join_path(folder_path.as_str(), "file2.txt").as_str());
         assert!(path.is_ok());
+
+        // ---------------------------------------
+        // Tests sync() (adding a new file)
+        // ---------------------------------------
+
         write_to_file(path.unwrap(), THIRD_FILE_CONTENT);
 
         let errors = indexer.sync().unwrap();
-        println!("{:?}", errors);
         assert!(errors.is_empty());
 
         let db = indexer.get_db();
 
         let file1 = db.get(String::from("file1.txt"));
         assert!(file1.is_ok());
+
         let first_content = String::from(FIRST_FILE_CONTENT);
         assert_eq!(file1.unwrap().content.unwrap(), first_content);
 
         let file3 = db.get(String::from("file2.txt"));
         assert!(file3.is_ok());
+
         let third_content = String::from(THIRD_FILE_CONTENT);
         assert_eq!(file3.unwrap().content.unwrap(), third_content);
-
-        let _ = tempdir.close();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_relative_path() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let folder = String::from("/tmp/ffsearch-test");
         if !Path::new(&folder).exists() {
             let _ = create_dir(folder.clone());
@@ -528,19 +552,42 @@ mod tests {
         }
 
         let mut file_indexer = FileIndexer::new(folder.clone(), FileIndexerConfig::new()).unwrap();
+
+        // ---------------------------------------
+        // Tests sync() (relative path)
+        // ---------------------------------------
+
         assert!(file_indexer.sync().unwrap().is_empty());
+
         generate_test_datas(folder.as_str());
+
         assert!(file_indexer.sync().unwrap().is_empty());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     async fn test_sync_three() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let (mut indexer, tempdir, folder_path) = setup();
+
         generate_test_datas(folder_path.as_str());
+
+        // ---------------------------------------
+        // Tests sync()
+        // ---------------------------------------
+
         indexer.sync().unwrap();
 
         let path = OsString::from_str(join_path(folder_path.as_str(), "file1.txt").as_str());
+
         assert!(path.is_ok());
+
+        // ---------------------------------------
+        // Tests sync() (remove file)
+        // ---------------------------------------
+
         let _ = remove_file(path.unwrap());
 
         indexer.sync().unwrap();

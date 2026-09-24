@@ -461,30 +461,56 @@ mod tests {
     /// Tests the get and add_document functions of the database
     #[test]
     fn test_get_and_add_document() {
-        let (database, temp_dir) = setup();
+        // ---------------------------------------
+        // Tear up (+ Test add_document)
+        // ---------------------------------------
+
+        let (database, _temp_dir) = setup();
+
+        // ---------------------------------------
+        // Tests get()
+        // ---------------------------------------
 
         let doc = database.get(String::from("file1.txt"));
+
         assert!(doc.is_ok());
         assert_eq!(doc.unwrap().content.unwrap(), FIRST_FILE_CONTENT);
 
+        // ---------------------------------------
+        // Tests get() (non-existant file)
+        // ---------------------------------------
+
         let not_found_doc = database.get(String::from("file2.txt"));
+
         assert!(match not_found_doc.clone().err().unwrap() {
             DatabaseError::NoResult => true,
             _ => false,
         });
 
+        // ---------------------------------------
+        // Tests get() (subdir file)
+        // ---------------------------------------
+
         let doc2 = database.get(String::from("dir1/file2.txt"));
         assert!(doc2.is_ok());
         assert_eq!(doc2.unwrap().content.unwrap(), SECOND_FILE_CONTENT);
-        let _ = temp_dir.close();
     }
 
     /// Tests the remove_document function of the database
     #[test]
     fn test_remove_document() {
-        let (mut database, temp_dir) = setup();
+        // ---------------------------------------
+        // Tear up (+ Test add_document)
+        // ---------------------------------------
+
+        let (mut database, _temp_dir) = setup();
         let doc = database.get(String::from("file1.txt"));
+
         assert!(doc.is_ok());
+
+        // ---------------------------------------
+        // Test remove_document()
+        // ---------------------------------------
 
         let _ = database.remove_document(String::from("file1.txt"));
 
@@ -492,40 +518,68 @@ mod tests {
 
         let doc2 = database.get(String::from("file1.txt"));
         assert!(doc2.is_err());
-        let _ = temp_dir.close();
     }
 
     /// Tests the search function of the database
     #[test]
     fn test_search() {
-        let (database, temp_dir) = setup();
+        // ---------------------------------------
+        // Tear up (+ Test add_document)
+        // ---------------------------------------
+
+        let (database, _temp_dir) = setup();
+
+        // ---------------------------------------
+        // Tests search() (one result)
+        // ---------------------------------------
+
         let results = database.search(String::from("catgirls"), 10).unwrap();
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].path, String::from("file1.txt"));
         assert_eq!(results[0].content, None);
 
+        // ---------------------------------------
+        // Tests search() (zero results)
+        // ---------------------------------------
+
         let no_results = database.search(String::from("NOO"), 10).unwrap();
+
         assert_eq!(no_results.len(), 0);
 
+        // ---------------------------------------
+        // Tests search() (two results)
+        // ---------------------------------------
+
         let results2 = database.search(String::from("YAY"), 10).unwrap();
+
         assert_eq!(results2.len(), 2);
-        let _ = temp_dir.close();
     }
 
     /// Tests the get_all function of the database
     #[test]
     fn test_all() {
-        let (database, temp_dir) = setup();
+        // ---------------------------------------
+        // Tear up (+ Test add_document)
+        // ---------------------------------------
+
+        let (database, _temp_dir) = setup();
+
+        // ---------------------------------------
+        // Tests get_all()
+        // ---------------------------------------
 
         let results = database.get_all(true).unwrap();
 
         assert_eq!(results.len(), 2);
-
-        let _ = temp_dir.close();
     }
 
     #[test]
     fn test_two_times_same_folder() {
+        // ---------------------------------------
+        // Tear up (+ Test add_document)
+        // ---------------------------------------
+
         let (mut database, temp_dir) = setup();
         let _ = database.add_document(
             String::from("file1.txt"),
@@ -537,7 +591,13 @@ mod tests {
             String::from(SECOND_FILE_CONTENT),
             0,
         );
+
+        // ---------------------------------------
+        // Tests two databases one after the other
+        // ---------------------------------------
+
         database.commit().unwrap();
+
         let temp_dir_path = temp_dir.path().to_str().unwrap().to_string();
 
         drop(database);

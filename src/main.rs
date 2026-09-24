@@ -38,60 +38,60 @@ mod utils;
 
 #[cfg(feature = "ai")]
 async fn test_ai() -> Option<ExitCode> {
-    let mut indexer = FileIndexer::new(
-        String::from("E:\\Tronc_commun\\TC_24\\M117\\S_Scripts"),
-        FileIndexerConfig::new(),
-    )
-    .expect("Failed to create file indexer");
-    indexer.sync().ok()?;
-    println!("Indexer synced");
-    let client = rig::providers::ollama::Client::new(Nothing).expect("Client failed to connect");
-    let model = client.embedding_model("embeddinggemma:latest");
-    println!("Building agent...");
-    let mut ai =
-        Agent::new_auto::<rig::providers::ollama::Client, rig::providers::ollama::EmbeddingModel>(
-            client,
-            AgentConfig::new(
-                "llama3.1:8b",
-                RagConfig::new(String::from("embeddinggemma:latest")),
-                AgentProvider::Ollama,
-            ),
-            Arc::new(RwLock::new(indexer)),
-            model,
-        )
-        .await
-        .expect("Failed to create agent");
-    let mut stop = false;
-    while !stop {
-        let mut buf = String::new();
-        print!("Enter a command: ");
-        std::io::stdout().flush().ok();
-        std::io::stdin()
-            .read_line(&mut buf)
-            .expect("Failed to read line");
-        let buf = buf.trim();
-        if buf == "exit" {
-            stop = true;
-        } else {
-            let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+    // let mut indexer = FileIndexer::new(
+    //     String::from("E:\\Tronc_commun\\TC_24\\M117\\S_Scripts"),
+    //     FileIndexerConfig::new(),
+    // )
+    // .expect("Failed to create file indexer");
+    // indexer.sync().ok()?;
+    // println!("Indexer synced");
+    // let client = rig::providers::ollama::Client::new(Nothing).expect("Client failed to connect");
+    // let model = client.embedding_model("embeddinggemma:latest");
+    // println!("Building agent...");
+    // let mut ai =
+    //     Agent::new_auto::<rig::providers::ollama::Client, rig::providers::ollama::EmbeddingModel>(
+    //         client,
+    //         AgentConfig::new(
+    //             "llama3.1:8b",
+    //             RagConfig::new(String::from("embeddinggemma:latest")),
+    //             AgentProvider::Ollama,
+    //         ),
+    //         Arc::new(RwLock::new(indexer)),
+    //         model,
+    //     )
+    //     .await
+    //     .expect("Failed to create agent");
+    // let mut stop = false;
+    // while !stop {
+    //     let mut buf = String::new();
+    //     print!("Enter a command: ");
+    //     std::io::stdout().flush().ok();
+    //     std::io::stdin()
+    //         .read_line(&mut buf)
+    //         .expect("Failed to read line");
+    //     let buf = buf.trim();
+    //     if buf == "exit" {
+    //         stop = true;
+    //     } else {
+    //         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
-            tokio::spawn(async move {
-                loop {
-                    match rx.recv().await {
-                        Some(m) => print!("{}", m),
-                        None => break,
-                    }
-                }
-            });
+    //         tokio::spawn(async move {
+    //             loop {
+    //                 match rx.recv().await {
+    //                     Some(m) => print!("{}", m),
+    //                     None => break,
+    //                 }
+    //             }
+    //         });
 
-            let r = ai.send(String::from(buf), tx).await;
+    //         let r = ai.send(String::from(buf), tx).await;
 
-            if r.is_err() {
-                println!("{:?}", r.unwrap_err());
-            }
-            println!("");
-        }
-    }
+    //         if r.is_err() {
+    //             println!("{:?}", r.unwrap_err());
+    //         }
+    //         println!("");
+    //     }
+    // }
     return None;
 }
 

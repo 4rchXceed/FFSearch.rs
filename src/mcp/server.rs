@@ -21,6 +21,10 @@ use tokio::{
 
 use crate::{controller::controller::Controller, mcp::config::McpServerConfig};
 
+// Re-used text
+static INDEXER_DELETED_TEXT: &'static str =
+    "The searcher has been deleted by the user while the action was running";
+
 /// Search request tool
 /// There's 3 parameters:
 /// - The ID of the folder
@@ -183,24 +187,30 @@ impl McpServer {
             .controller
             .read()
             .await
-            .get_controller_for(folder_id as u32);
+            .get_controller_for(folder_id as u32, self.context.controller.clone());
 
         match folder_controller {
             Ok(controller) => {
                 let result = controller.get_content(path).await;
 
-                if let Ok(result) = result {
-                    let content =
-                        ContentBlock::text(result.content.unwrap_or(String::from("No content")));
+                if let Some(result) = result {
+                    return match result {
+                        Ok(result) => {
+                            let content = ContentBlock::text(
+                                result.content.unwrap_or(String::from("No content")),
+                            );
+                            Ok(CallToolResult::success(vec![content]))
+                        }
+                        Err(error) => {
+                            let content =
+                                ContentBlock::text(format!("Error: {}", error.to_string()));
 
-                    return Ok(CallToolResult::success(vec![content]));
-                } else if let Err(error) = result {
-                    let content = ContentBlock::text(format!("Error: {}", error.to_string()));
-
-                    return Ok(CallToolResult::error(vec![content]));
+                            Ok(CallToolResult::error(vec![content]))
+                        }
+                    };
                 } else {
                     return Ok(CallToolResult::error(vec![ContentBlock::text(
-                        String::from("Unknown error"),
+                        INDEXER_DELETED_TEXT,
                     )]));
                 }
             }
@@ -227,35 +237,41 @@ impl McpServer {
             .controller
             .read()
             .await
-            .get_controller_for(folder_id as u32);
+            .get_controller_for(folder_id as u32, self.context.controller.clone());
 
         match folder_controller {
             Ok(controller) => {
                 let search_results = controller.search(query, limit).await;
 
-                match search_results {
-                    Err(error) => {
-                        let error_text =
-                            ContentBlock::text(format!("Error while searching: {}", error));
-                        return Ok(CallToolResult::error(vec![error_text]));
+                if let Some(search_results) = search_results {
+                    match search_results {
+                        Err(error) => {
+                            let error_text =
+                                ContentBlock::text(format!("Error while searching: {}", error));
+                            return Ok(CallToolResult::error(vec![error_text]));
+                        }
+
+                        Ok(search_results) => {
+                            let results: Vec<String> = search_results
+                                .iter()
+                                .map(|r| {
+                                    format!(
+                                        "Path: {}, Last modification: {}",
+                                        r.path,
+                                        r.modification_date.into_primitive().to_string()
+                                    )
+                                })
+                                .collect();
+
+                            let content = ContentBlock::text(results.join("\n"));
+
+                            return Ok(CallToolResult::success(vec![content]));
+                        }
                     }
-
-                    Ok(search_results) => {
-                        let results: Vec<String> = search_results
-                            .iter()
-                            .map(|r| {
-                                format!(
-                                    "Path: {}, Last modification: {}",
-                                    r.path,
-                                    r.modification_date.into_primitive().to_string()
-                                )
-                            })
-                            .collect();
-
-                        let content = ContentBlock::text(results.join("\n"));
-
-                        return Ok(CallToolResult::success(vec![content]));
-                    }
+                } else {
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(
+                        INDEXER_DELETED_TEXT,
+                    )]));
                 }
             }
             Err(e) => {

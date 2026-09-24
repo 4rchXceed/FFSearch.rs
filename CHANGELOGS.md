@@ -54,3 +54,8 @@
   - MCP
 TODO: Unittests for controller
 TODO: Re-wrote the manual tests in main
+
+## Last commit: d0eb9d5c1e733de95441d82919d9c78a07830c87
++ Added unittests for controller
++ Improved other unittests for lisibility
++ NO LONGER USING Arc<RwLock\<FileIndexer>> but LockedController for better architecture

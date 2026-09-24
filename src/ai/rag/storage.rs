@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use lancedb::{Connection, Table, index::vector::IvfPqIndexBuilder};
 use rig::{
     Embed,
@@ -11,10 +9,9 @@ use rig::{
     wasm_compat::WasmBoxedFuture,
 };
 use rig_lancedb::{LanceDBFilter, LanceDbVectorIndex, SearchParams};
-use tokio::sync::RwLock;
 
 use crate::{
-    ai::agent::AIError, file_indexer::indexer::FileIndexer, searcher::database::Database,
+    ai::agent::AIError, controller::controller::FolderController,
     third_party::rig_utils::as_record_batch, utils::join_path,
 };
 
@@ -101,13 +98,12 @@ where
     /// Returns:
     /// - Ok(()) if the storage was successfully initialized.
     /// - Err(AIError) if an error occurred.
-    pub async fn init_from_db(&mut self, db: Arc<RwLock<FileIndexer>>) -> Result<(), AIError> {
+    pub async fn init_from_db(&mut self, db: FolderController) -> Result<(), AIError> {
         // Get all the documents from the DB and split them into batches (See RAG_MAX_BATCH_SIZE).
         let documents_raw = db
-            .read()
+            .get_everything(false)
             .await
-            .get_db_ro()
-            .get_all(false)
+            .ok_or(AIError::IndexerDeleted)?
             .map_err(|e| AIError::FailedToGetAllDocuments(e))?;
 
         let mut documents = Vec::new();

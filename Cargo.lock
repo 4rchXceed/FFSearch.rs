@@ -8,7 +8,6 @@ version = "0.1.0"
 dependencies = [
  "arrow-array",
  "chrono",
- "futures",
  "hyper",
  "hyper-util",
  "ini",

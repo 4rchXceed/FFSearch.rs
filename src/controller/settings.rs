@@ -384,8 +384,13 @@ pub mod tests {
 
     #[test]
     fn test_save_config_normal() {
-        let (dir, ini_path) = generate_ini();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+        // Generate the ini file
+        let (_dir, ini_path) = generate_ini();
 
+        // Create the settings class
         let mut settings = Settings::default();
 
         settings.set_file(ini_path.clone());
@@ -395,10 +400,17 @@ pub mod tests {
         settings.file_indexer.db_config.database_folder_prefix = String::from(".data");
         settings.file_indexer.db_config.max_db_size = 3;
 
+        // ---------------------------------------
+        // Test save()
+        // ---------------------------------------
         settings.save().expect("Failed to save settings");
 
+        // ---------------------------------------
+        // load() after save()
+        // ---------------------------------------
         let settings_new = Settings::load(ini_path).expect("Failed to load new settings");
 
+        // Checks
         assert_eq!(settings_new.file_indexer.number_of_threads, 1);
         assert_eq!(settings_new.file_indexer.max_file_size, 2);
         assert_eq!(
@@ -406,34 +418,41 @@ pub mod tests {
             ".data"
         );
         assert_eq!(settings_new.file_indexer.db_config.max_db_size, 3);
-
-        dir.close().expect("Failed to remove temp dir");
     }
 
     #[test]
     fn test_load_config_normal() {
-        let (ini, dir) = write_sample_ini();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+        // Generate the ini file
+        let (ini, _dir) = write_sample_ini();
 
+        // ---------------------------------------
+        // Tests load() for the file indexer settings
+        // ---------------------------------------
+        // Loads
         let config = Settings::load(ini).expect("Failed to read config: ");
 
+        // Checks
         assert_eq!(config.file_indexer.number_of_threads, 12);
-
         assert_eq!(config.file_indexer.max_file_size, 1000000);
-
         assert_eq!(config.file_indexer.db_config.max_db_size, 100000000);
-
         assert_eq!(
             config.file_indexer.db_config.database_folder_prefix,
             String::from(".db")
         );
-
-        dir.close().expect("Failed to remove temp dir");
     }
 
     #[test]
     #[cfg(feature = "ai")]
     fn test_save_config_ai() {
-        let (dir, ini_path) = generate_ini();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
+        // Generates the ini
+        let (_dir, ini_path) = generate_ini();
 
         let mut settings = Settings::default();
 
@@ -445,10 +464,17 @@ pub mod tests {
         settings.ai.think = true;
         settings.ai.api_key = String::from("xyz");
 
+        // ---------------------------------------
+        // Tests load() after save() (AI settings)
+        // ---------------------------------------
+
+        // Save
         settings.save().expect("Failed to save settings");
 
+        // Load
         let settings_new = Settings::load(ini_path).expect("Failed to load new settings");
 
+        // Checks
         assert_eq!(settings_new.ai.model, "miku:4000b");
         assert_eq!(settings_new.ai.preamble, "Only answer in morse code");
         assert!(match settings_new.ai.provider {
@@ -457,37 +483,43 @@ pub mod tests {
         });
         assert_eq!(settings_new.ai.think, true);
         assert_eq!(settings_new.ai.api_key, "xyz");
-
-        dir.close().expect("Failed to remove temp dir");
     }
 
     #[test]
     #[cfg(feature = "ai")]
     fn test_load_config_ai() {
-        let (ini, dir) = write_sample_ini();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
+        // Writes the ini
+        let (ini, _dir) = write_sample_ini();
+
+        // ---------------------------------------
+        // Tests load() (AI Settings)
+        // ---------------------------------------
 
         let config = Settings::load(ini).expect("Failed to read config: ");
 
         assert_eq!(config.ai.model, "minimodel:1b");
-
         assert_eq!(config.ai.preamble, "You are Hatsune Miku");
-
         assert_eq!(config.ai.think, true);
-
         assert!(match config.ai.provider {
             AgentProvider::OpenAI => true,
             _ => false,
         });
-
         assert_eq!(config.ai.api_key, "Miku-393939");
-
-        dir.close().expect("Failed to remove temp dir");
     }
 
     #[test]
     #[cfg(feature = "ai")]
     fn test_save_config_rag() {
-        let (dir, ini_path) = generate_ini();
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
+        // Generates the ini
+        let (_dir, ini_path) = generate_ini();
 
         let mut settings = Settings::default();
 
@@ -496,20 +528,30 @@ pub mod tests {
         settings.ai.rag_config.top_results = 39;
         settings.ai.rag_config.embedding_model = String::from("mikusuper:1b");
 
+        // ---------------------------------------
+        // Tests load() after save() (RAG Settings)
+        // ---------------------------------------
+
         settings.save().expect("Failed to save settings");
 
         let settings_new = Settings::load(ini_path).expect("Failed to load new settings");
 
         assert_eq!(settings_new.ai.rag_config.top_results, 39);
         assert_eq!(settings_new.ai.rag_config.embedding_model, "mikusuper:1b");
-
-        dir.close().expect("Failed to remove temp dir");
     }
 
     #[test]
     #[cfg(feature = "ai")]
     fn test_load_config_rag() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let (ini, dir) = write_sample_ini();
+
+        // ---------------------------------------
+        // Tests load() (RAG Settings)
+        // ---------------------------------------
 
         let config = Settings::load(ini).expect("Failed to read config: ");
 
@@ -522,6 +564,10 @@ pub mod tests {
     #[test]
     #[cfg(feature = "mcp")]
     fn test_save_config_mcp() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let (dir, ini_path) = generate_ini();
 
         let mut settings = Settings::default();
@@ -529,6 +575,10 @@ pub mod tests {
         settings.set_file(ini_path.clone());
 
         settings.mcp.listen_addr = String::from("localhost:3333");
+
+        // ---------------------------------------
+        // Tests load() after save() (MCP Settings)
+        // ---------------------------------------
 
         settings.save().expect("Failed to save settings");
 
@@ -542,7 +592,15 @@ pub mod tests {
     #[test]
     #[cfg(feature = "mcp")]
     fn test_load_config_mcp() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let (ini, dir) = write_sample_ini();
+
+        // ---------------------------------------
+        // Tests load() (MCP Settings)
+        // ---------------------------------------
 
         let config = Settings::load(ini).expect("Failed to read config: ");
 

@@ -200,36 +200,61 @@ impl DaemonWorker {
         db_path: String,
         indexer_uid: u32,
     ) {
-        let controller = self.controller.read().await.get_controller_for(indexer_uid);
-        if let Ok(controller) = controller {
+        let deleted_message: &str =
+            "[DAEMON]: File indexer has been deleted without cleaning the daemon";
+
+        let controller = self
+            .controller
+            .read()
+            .await
+            .get_controller_for(indexer_uid, self.controller.clone());
+
+        if let Ok(controller) = controller
+            && let Some(db_path) = controller.get_db_path().await
+        {
             // Check if it's not the system folder
-            let error = if !path.starts_with(&controller.get_db_path().await) {
-                if event.kind.is_modify() || event.kind.is_create() {
-                    // Already exists
-                    if controller.get_content(db_path).await.is_ok() {
-                        controller
-                            .index_file_change(path.clone(), FileOperationNeeded::Update)
-                            .await
-                    // Doesn't exists
-                    } else {
-                        controller
-                            .index_file_change(path.clone(), FileOperationNeeded::Add)
-                            .await
+            if path.starts_with(&db_path) {
+                return;
+            }
+
+            if !event.kind.is_modify() && !event.kind.is_create() {
+                if event.kind.is_remove() {
+                    let operation_result = controller.remove_document(db_path).await;
+
+                    match operation_result {
+                        Some(result) => match result {
+                            Err(e) => error!("[DAEMON]: Error while removing file: {e}"),
+                            _ => {}
+                        },
+                        None => error!("{deleted_message}"),
                     }
-                } else if event.kind.is_remove() {
+                }
+
+                return;
+            }
+
+            if let Some(content_result) = controller.get_content(db_path).await {
+                let result = if content_result.is_ok() {
                     controller
-                        .remove_document(db_path)
+                        .index_file_change(path.clone(), FileOperationNeeded::Update)
                         .await
-                        .map_err(|e| e.to_string())
-                        .err()
+                // Doesn't exists
                 } else {
-                    None
+                    controller
+                        .index_file_change(path.clone(), FileOperationNeeded::Add)
+                        .await
+                };
+
+                match result {
+                    Some(maybe_error) => match maybe_error {
+                        Some(e) => error!("[DAEMON]: Error while adding/updating file: {e}"),
+                        None => {}
+                    },
+                    None => error!("{deleted_message}"),
                 }
             } else {
-                None
-            };
-            if let Some(error) = error {
-                error!("Error while indexing {path}: {error}");
+                error!("File indexer {indexer_uid} deleted while daemon still active!");
+                return;
             }
         } else {
             error!("Folder with id: {indexer_uid} not found!");
@@ -250,6 +275,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_worker_single_folder() {
+        // ---------------------------------------
+        // Tear up
+        // ---------------------------------------
+
         let indexer_temp_dir = TempDir::new("ffsearch_test")
             .expect("Tempdir failed")
             .path()
@@ -285,6 +314,10 @@ mod tests {
 
         sleep(Duration::from_millis(1000)).await; // TODO: Maybe find a better way to do it?
 
+        // ---------------------------------------
+        // Tests adding a file
+        // ---------------------------------------
+
         let mut file = fs::File::create(format!(
             "{}{}file1.txt",
             indexer_temp_dir_new, MAIN_SEPARATOR
@@ -300,10 +333,11 @@ mod tests {
             let file1 = arc_new
                 .read()
                 .await
-                .get_controller_for(folder_id)
+                .get_controller_for(folder_id, arc_new.clone())
                 .expect("Failed to get controller for folder")
                 .get_content(String::from("file1.txt"))
-                .await;
+                .await
+                .expect("Indexer removed");
 
             if let Ok(file1) = file1
                 && file1.content == Some(String::from("Hello World~"))
