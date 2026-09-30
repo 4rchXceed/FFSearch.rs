@@ -9,17 +9,24 @@ use domain::indexer::{config::FileIndexerConfig, error::FileIndexerError};
 use utils::same_path;
 use walkdir::{DirEntry, WalkDir};
 
-pub struct StdFileIndexerProvider {}
+pub struct StdFileIndexerProvider {
+    config: FileIndexerConfig,
+}
 
 impl StdFileIndexerProvider {
+    pub fn new(config: FileIndexerConfig) -> Self {
+        return Self { config };
+    }
+
     /// Checks if the given file is a valid filename for indexing.
     /// Parameters:
     /// - file: the file to check.
     /// Returns: bool - if the file should be indexed.
-    fn is_correct_filename(file: &DirEntry, folder: String, config: &FileIndexerConfig) -> bool {
+    fn is_correct_filename(&self, file: &DirEntry, folder: String) -> bool {
         let file = canonicalize(file.path());
-        let db_folder =
-            canonicalize(Path::new(&folder).join(config.db_config.database_folder_prefix.clone()));
+        let db_folder = canonicalize(
+            Path::new(&folder).join(self.config.db_config.database_folder_prefix.clone()),
+        );
 
         if let Ok(file) = file
             && let Ok(db_folder) = db_folder
@@ -55,12 +62,12 @@ impl StdFileIndexerProvider {
 }
 
 impl FileIndexerProvider for StdFileIndexerProvider {
-    fn get_all_files(&self, folder: String, config: &FileIndexerConfig) -> Vec<PathBuf> {
+    fn get_all_files(&self, folder: String) -> Vec<PathBuf> {
         return WalkDir::new(folder.clone())
             .into_iter()
             .filter_map(|e| e.ok())
             // Filter out sys files and db folder
-            .filter(|e| Self::is_correct_filename(e, folder.clone(), config))
+            .filter(|e| self.is_correct_filename(e, folder.clone()))
             // Filter out the folder itself
             .filter(|e| !same_path(&e.path().to_string_lossy().to_string(), &folder.as_str()))
             // Filter out directories
@@ -91,5 +98,9 @@ impl FileIndexerProvider for StdFileIndexerProvider {
         }
 
         return Ok(timestamp);
+    }
+
+    fn get_config(&self) -> &FileIndexerConfig {
+        return &self.config;
     }
 }

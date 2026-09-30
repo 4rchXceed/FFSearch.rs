@@ -6,5 +6,5 @@ pub trait TextExtractor: Send + Sync {
     /// Returns the extracted text as a string, or an error if extraction fails.
     /// Parameters:
     /// - path: the path to the file to extract text from
-    async fn extract(&self, path: String, max_bytes: usize) -> Result<String, String>;
+    async fn extract(&self, path: String) -> Result<String, String>;
 }

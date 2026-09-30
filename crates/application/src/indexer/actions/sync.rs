@@ -1,27 +1,29 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{MAIN_SEPARATOR_STR, PathBuf},
+    sync::Arc,
+};
 
 use domain::{
-    indexer::{
-        config::FileIndexerConfig, error::FileIndexerError, file_operation::FileOperationNeeded,
-    },
+    indexer::{error::FileIndexerError, file_operation::FileOperationNeeded},
     searcher::document::Document,
 };
+#[cfg(not(test))]
 use tqdm::tqdm;
-use utils::{same_path, to_local_path};
+use utils::{same_path, to_local_path, trim_custom};
 
 use crate::{
     indexer::traits::{file_indexer::FileIndexerProvider, text_extractor::TextExtractor},
     searcher::{actions::get::DatabaseGet, traits::database::DatabaseProvider},
 };
 
-pub struct SyncFolder {
+pub struct FileIndexerSync {
     indexer: Arc<dyn FileIndexerProvider>,
     database: Arc<dyn DatabaseProvider>,
     extractor: Arc<dyn TextExtractor>,
-    config: FileIndexerConfig,
+    folder: String,
 }
 
-impl SyncFolder {
+impl FileIndexerSync {
     /// Creates a SyncFolder
     ///
     /// Parameters:
@@ -36,13 +38,13 @@ impl SyncFolder {
         indexer: Arc<dyn FileIndexerProvider>,
         database: Arc<dyn DatabaseProvider>,
         extractor: Arc<dyn TextExtractor>,
-        config: FileIndexerConfig,
+        folder: String,
     ) -> Self {
         return Self {
-            indexer: indexer,
-            database: database,
-            extractor: extractor,
-            config: config,
+            indexer,
+            database,
+            extractor,
+            folder,
         };
     }
 
@@ -92,8 +94,8 @@ impl SyncFolder {
     ///
     /// Returns:
     /// - A list of errors that occurred during the sync process.
-    pub async fn sync(&self, folder: String) -> Result<Vec<FileIndexerError>, FileIndexerError> {
-        let real_files = self.indexer.get_all_files(folder.clone(), &self.config);
+    pub async fn sync(&self) -> Result<Vec<FileIndexerError>, FileIndexerError> {
+        let real_files = self.indexer.get_all_files(self.folder.clone());
 
         let db_files = DatabaseGet::new(self.database.clone())
             .get_all_without_content()
@@ -102,8 +104,13 @@ impl SyncFolder {
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
         let mut all_files_to_process = Vec::new();
 
-        for file in tqdm(real_files.iter()).desc(Some(String::from("Checking every file"))) {
-            let result = self.check_one_file(file, &db_files, folder.clone());
+        #[cfg(not(test))]
+        let iterator = tqdm(real_files.iter()).desc(Some(String::from("Checking every file")));
+        #[cfg(test)]
+        let iterator = real_files.iter();
+
+        for file in iterator {
+            let result = self.check_one_file(file, &db_files, self.folder.clone());
 
             if let Err(error) = result {
                 all_errors.push(error);
@@ -115,8 +122,31 @@ impl SyncFolder {
             }
         }
 
-        self.threaded_sync(&mut all_errors, all_files_to_process, folder)
+        self.threaded_sync(&mut all_errors, all_files_to_process)
             .await?;
+
+        for db_file in db_files {
+            if !real_files
+                .iter()
+                .filter_map(|f| {
+                    f.strip_prefix(self.folder.as_str())
+                        .map_or(None, |e| Some(e.to_string_lossy().to_string()))
+                })
+                .map(|f| trim_custom(f, MAIN_SEPARATOR_STR))
+                .any(|f| f == db_file.path)
+            {
+                let result = self.database.remove_document(db_file.path).await;
+
+                if let Err(error) = result {
+                    all_errors.push(FileIndexerError::FailedToRemoveDocument(error.to_string()));
+                }
+            }
+        }
+
+        self.database
+            .commit()
+            .await
+            .map_err(|e| FileIndexerError::DatabaseCommitError(e.to_string()))?;
 
         return Ok(all_errors);
     }
@@ -131,10 +161,10 @@ impl SyncFolder {
         &self,
         all_errors: &mut Vec<FileIndexerError>,
         all_files_to_process: Vec<(PathBuf, FileOperationNeeded)>,
-        folder: String,
     ) -> Result<(), FileIndexerError> {
-        let number_of_threads = self.config.number_of_threads;
-        let max_file_size = self.config.max_file_size;
+        let config = self.indexer.get_config();
+
+        let number_of_threads = config.number_of_threads;
 
         let mut threads = Vec::new();
 
@@ -152,15 +182,16 @@ impl SyncFolder {
             threads.push(tokio::spawn(async move {
                 let mut results = Vec::new();
 
-                for (file, operation) in
-                    tqdm(thread_process_files).desc(Some(format!("Thread: {}", th)))
-                {
+                #[cfg(not(test))]
+                let iterator = tqdm(thread_process_files).desc(Some(format!("Thread: {}", th)));
+                #[cfg(test)]
+                let iterator = thread_process_files;
+
+                for (file, operation) in iterator {
                     results.push((
                         file.clone(),
                         operation,
-                        extractor
-                            .extract(file.to_string_lossy().to_string(), max_file_size)
-                            .await,
+                        extractor.extract(file.to_string_lossy().to_string()).await,
                     ));
                 }
 
@@ -174,8 +205,14 @@ impl SyncFolder {
             if let Ok(results) = results {
                 for (file, operation, result) in results {
                     if result.is_ok() {
-                        self.process_result(all_errors, file, operation, result, folder.clone())
-                            .await;
+                        self.process_result(
+                            all_errors,
+                            file,
+                            operation,
+                            result,
+                            self.folder.clone(),
+                        )
+                        .await;
                     } else if let Err(error) = result {
                         all_errors.push(FileIndexerError::GetFileContentError(error));
                     }
@@ -184,11 +221,6 @@ impl SyncFolder {
                 all_errors.push(FileIndexerError::ThreadError);
             }
         }
-
-        self.database
-            .commit()
-            .await
-            .map_err(|e| FileIndexerError::DatabaseCommitError(e.to_string()))?;
 
         return Ok(());
     }

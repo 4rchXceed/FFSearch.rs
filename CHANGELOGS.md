@@ -67,3 +67,8 @@ TODO: Re-wrote the manual tests in main
 ## Last commit: 0b1a9cad2ef5022e4c946db542200892c8363d7d
 + Started switching the project to a clean architecture, after alot of thinking
 + I'm using a new branch: clean-arch
+
+## Last commit: f880833aff6ab45ad4a20c5ecf35520b03f4308e
++ Finished to port of the AI part to the clean architecture
++ Tests for file indexer / sync / text extractor
++ Test implementation for AI
