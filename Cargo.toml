@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = [".tmp/test-ip",
+members = [
     "crates/application",
     "crates/domain",
     "crates/infrastructure",
