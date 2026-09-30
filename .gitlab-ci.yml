@@ -1,3 +1,8 @@
+include:
+  - component: $CI_SERVER_FQDN/to-be-continuous/rust/gitlab-ci-rust@1.1.0
+    inputs:
+      build-args: "--all-features"
+
 stages:
   - test
 
