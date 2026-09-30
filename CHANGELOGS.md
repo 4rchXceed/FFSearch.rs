@@ -72,3 +72,6 @@ TODO: Re-wrote the manual tests in main
 + Finished to port of the AI part to the clean architecture
 + Tests for file indexer / sync / text extractor
 + Test implementation for AI
+
+## Last commit: 98692120bf272a601f416deb3450a68be68b2309
++ Gitlab CI
