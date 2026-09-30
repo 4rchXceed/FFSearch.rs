@@ -66,6 +66,7 @@
           protobuf
           openssl
           bzip2
+          clang
         ];
 
         LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [

@@ -59,3 +59,11 @@ TODO: Re-wrote the manual tests in main
 + Added unittests for controller
 + Improved other unittests for lisibility
 + NO LONGER USING Arc<RwLock\<FileIndexer>> but LockedController for better architecture
+
+## Last commit: 0b1a9cad2ef5022e4c946db542200892c8363d7d
++ Fixed unittests (some were broken)
++ Added unittests for daemon
+
+## Last commit: 0b1a9cad2ef5022e4c946db542200892c8363d7d
++ Started switching the project to a clean architecture, after alot of thinking
++ I'm using a new branch: clean-arch
