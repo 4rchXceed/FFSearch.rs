@@ -15,12 +15,16 @@ async fn test_text_extractor_palin_txt() {
 
     let file_path = path.join("test.txt");
 
-    File::create(file_path.clone())
+    let mut file = File::create(file_path.clone())
         .await
-        .expect("Failed to create file")
-        .write_all(b"Hatsuneeeee")
+        .expect("Failed to create file");
+
+    file.write_all(b"Hatsuneeeee")
         .await
         .expect("Failed to write file");
+
+    file.flush().await.expect("Failed to flush file");
+    drop(file);
 
     let file_extractor = XbergFileExtractor::new(&FileIndexerConfig::new());
 
@@ -47,12 +51,16 @@ async fn test_extract_docx() {
 
     let file_path = path.join("test.docx");
 
-    File::create(file_path.clone())
+    let mut file = File::create(file_path.clone())
         .await
-        .expect("Failed to create file")
-        .write_all(include_bytes!("./sample_datas/test_text_extractor.docx"))
+        .expect("Failed to create file");
+
+    file.write_all(include_bytes!("./sample_datas/test_text_extractor.docx"))
         .await
         .expect("Failed to write to file");
+
+    file.flush().await.expect("Failed to flush file");
+    drop(file);
 
     let file_extractor = XbergFileExtractor::new(&FileIndexerConfig::new());
 

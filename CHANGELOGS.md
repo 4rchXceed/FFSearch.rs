@@ -87,3 +87,8 @@ TODO: Re-wrote the manual tests in main
 + Migrated daemon manager
 + Unittests for worker + manager
 + Minor changes
+
+## Last commit: e89d9b6acbfd7c4ebf9463f003dc2e9cb613e646
++ Fixed pipeline (was still broken)
++ Added settings
++ Added unittests for the settings
