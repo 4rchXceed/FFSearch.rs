@@ -3,7 +3,7 @@
     "rust-analyzer": {
       "initialization_options": {
         "cargo": {
-          "features": ["ai"]
+          "features": ["ai", "mcp_server"]
         }
       }
     }

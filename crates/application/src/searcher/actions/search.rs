@@ -2,23 +2,39 @@ use std::sync::Arc;
 
 use domain::searcher::{document::Document, search_query::SearchQuery};
 
-use crate::searcher::{error::DatabaseError, traits::database::DatabaseProvider};
+use crate::{
+    indexer::traits::registry::{FileIndexerRegistry, IndexerId},
+    searcher::error::DatabaseError,
+};
 
 pub struct SearchDocument {
-    database: Arc<dyn DatabaseProvider>,
+    registry: Arc<dyn FileIndexerRegistry>,
 }
 
 impl SearchDocument {
-    pub fn new(database: Arc<dyn DatabaseProvider>) -> Self {
-        return Self { database: database };
+    pub fn new(registry: Arc<dyn FileIndexerRegistry>) -> Self {
+        return Self { registry: registry };
     }
 
-    pub fn search(&self, query: String, limit: usize) -> Result<Vec<Document>, DatabaseError> {
+    pub async fn search(
+        &self,
+        folder: IndexerId,
+        query: String,
+        limit: usize,
+    ) -> Result<Vec<Document>, DatabaseError> {
         let query = SearchQuery {
             query: query,
             limit: limit,
         };
 
-        return self.database.search(query);
+        let db = self
+            .registry
+            .get_database(folder)
+            .await
+            .ok_or(DatabaseError::Database(String::from(
+                "Database deleted / doesn't exists",
+            )))?;
+
+        return db.search(query);
     }
 }

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "crates/application",
     "crates/domain",
+    "crates/frontends/mcp",
     "crates/infrastructure",
     # "crates/ports/tantivy",
     "crates/utils",
@@ -20,6 +21,8 @@ application = { path = "crates/application" }
 domain = { path = "crates/domain" }
 tempdir = "0.3.7"
 tokio = { version = "1.53.1", features = ["full"] }
+mcp = { path = "crates/frontends/mcp", optional = true }
 
 [features]
 ai=["infrastructure/ai"]
+mcp_server=["mcp"]

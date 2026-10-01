@@ -5,11 +5,18 @@ extern crate tempdir;
 
 use std::sync::Arc;
 
-use application::searcher::actions::{
-    get::DatabaseGet, modification::UpdateDatabase, search::SearchDocument,
+use application::{
+    indexer::traits::registry::FileIndexerRegistry,
+    searcher::actions::{get::DatabaseGet, modification::UpdateDatabase, search::SearchDocument},
 };
-use domain::searcher::{config::DatabaseConfig, document::Document};
-use infrastructure::searcher::tantivy::database::TantivyDatabase;
+use domain::{
+    indexer::config::FileIndexerConfig,
+    searcher::{config::DatabaseConfig, document::Document},
+};
+use infrastructure::{
+    indexer::stdfile::{indexer::StdFileIndexerProvider, registry::InMemoryRegistry},
+    searcher::tantivy::database::TantivyDatabase,
+};
 use tempdir::TempDir;
 
 #[tokio::test]
@@ -17,14 +24,26 @@ async fn test_database_add_remove_update_get_all_with_content() {
     // ---------------------------------------
     // Tear up
     // ---------------------------------------
+
     let tempdir = TempDir::new("ffsearch_test").expect("Failed to create tempdir");
     let path = tempdir.path().to_string_lossy().to_string();
 
-    let db = TantivyDatabase::new(path, DatabaseConfig::new()).expect("Failed to create db");
+    let db =
+        TantivyDatabase::new(path.clone(), DatabaseConfig::new()).expect("Failed to create db");
     let db_provider = Arc::new(db);
 
-    let modification = UpdateDatabase::new(db_provider.clone());
-    let get = DatabaseGet::new(db_provider.clone());
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(
+            Arc::new(StdFileIndexerProvider::new(FileIndexerConfig::new())),
+            db_provider,
+            path,
+        )
+        .await;
+    let registry = Arc::new(registry);
+
+    let modification = UpdateDatabase::new(registry.clone());
+    let get = DatabaseGet::new(registry);
 
     let document = Document::new(
         String::from("file1.txt"),
@@ -37,7 +56,7 @@ async fn test_database_add_remove_update_get_all_with_content() {
     // ---------------------------------------
 
     modification
-        .add(document.clone())
+        .add(id, document.clone())
         .await
         .expect("Failed to add new doc");
 
@@ -45,7 +64,7 @@ async fn test_database_add_remove_update_get_all_with_content() {
     // Test: apply_changes()
     // ---------------------------------------
     modification
-        .apply_changes()
+        .apply_changes(id)
         .await
         .expect("Failed to apply changes");
 
@@ -54,7 +73,8 @@ async fn test_database_add_remove_update_get_all_with_content() {
     // ---------------------------------------
 
     let result = get
-        .get_one(String::from("file1.txt"))
+        .get_one(1, String::from("file1.txt"))
+        .await
         .expect("Failed to get file");
 
     assert_eq!(result.content, Some(String::from("Hatsune Miku~")));
@@ -69,12 +89,12 @@ async fn test_database_add_remove_update_get_all_with_content() {
     new_document.modification_date = 1;
 
     modification
-        .update(String::from("file1.txt"), new_document.clone())
+        .update(id, String::from("file1.txt"), new_document.clone())
         .await
         .expect("Failed to update document");
 
     modification
-        .apply_changes()
+        .apply_changes(id)
         .await
         .expect("Failed to apply changes");
 
@@ -82,7 +102,10 @@ async fn test_database_add_remove_update_get_all_with_content() {
     // Test: get_all_with_content()
     // ---------------------------------------
 
-    let result = get.get_all_with_content().expect("Failed to get file");
+    let result = get
+        .get_all_with_content(id)
+        .await
+        .expect("Failed to get file");
 
     assert_eq!(result, vec![new_document]);
 }
@@ -95,11 +118,22 @@ async fn test_database_add_remove_search() {
     let tempdir = TempDir::new("ffsearch_test").expect("Failed to create tempdir");
     let path = tempdir.path().to_string_lossy().to_string();
 
-    let db = TantivyDatabase::new(path, DatabaseConfig::new()).expect("Failed to create db");
+    let db =
+        TantivyDatabase::new(path.clone(), DatabaseConfig::new()).expect("Failed to create db");
     let db_provider = Arc::new(db);
 
-    let modification = UpdateDatabase::new(db_provider.clone());
-    let search = SearchDocument::new(db_provider.clone());
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(
+            Arc::new(StdFileIndexerProvider::new(FileIndexerConfig::new())),
+            db_provider,
+            path,
+        )
+        .await;
+    let registry = Arc::new(registry);
+
+    let modification = UpdateDatabase::new(registry.clone());
+    let search = SearchDocument::new(registry);
 
     let document = Document::new(
         String::from("file1.txt"),
@@ -117,12 +151,12 @@ async fn test_database_add_remove_search() {
     // ---------------------------------------
 
     modification
-        .add(document)
+        .add(id, document)
         .await
         .expect("Failed to add new doc");
 
     modification
-        .add(document_2)
+        .add(id, document_2)
         .await
         .expect("Failed to add 2nd doc");
 
@@ -130,7 +164,7 @@ async fn test_database_add_remove_search() {
     // Test: apply_changes()
     // ---------------------------------------
     modification
-        .apply_changes()
+        .apply_changes(id)
         .await
         .expect("Failed to apply changes");
 
@@ -138,14 +172,16 @@ async fn test_database_add_remove_search() {
     // Test: search()
     // ---------------------------------------
     let result = search
-        .search(String::from("Hatsune"), 2)
+        .search(id, String::from("Hatsune"), 2)
+        .await
         .expect("Failed to search");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].path, "file1.txt");
 
     let result = search
-        .search(String::from("HEHE"), 2)
+        .search(id, String::from("HEHE"), 2)
+        .await
         .expect("Failed to search");
 
     assert_eq!(result.len(), 2);
@@ -154,17 +190,18 @@ async fn test_database_add_remove_search() {
     // Test: remove()
     // ---------------------------------------
     modification
-        .remove(String::from("file1.txt"))
+        .remove(id, String::from("file1.txt"))
         .await
         .expect("Failed to remove");
 
     modification
-        .apply_changes()
+        .apply_changes(id)
         .await
         .expect("Failed to apply changes");
 
     let result = search
-        .search(String::from("Hatsune"), 2)
+        .search(id, String::from("Hatsune"), 2)
+        .await
         .expect("Failed to search");
 
     assert_eq!(result.len(), 0);
@@ -178,11 +215,21 @@ async fn test_database_add_get_one_apply_get_all_without_content() {
     let tempdir = TempDir::new("ffsearch_test").expect("Failed to create tempdir");
     let path = tempdir.path().to_string_lossy().to_string();
 
-    let db = TantivyDatabase::new(path, DatabaseConfig::new()).expect("Failed to create db");
+    let db =
+        TantivyDatabase::new(path.clone(), DatabaseConfig::new()).expect("Failed to create db");
     let db_provider = Arc::new(db);
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(
+            Arc::new(StdFileIndexerProvider::new(FileIndexerConfig::new())),
+            db_provider,
+            path,
+        )
+        .await;
+    let registry = Arc::new(registry);
 
-    let modification = UpdateDatabase::new(db_provider.clone());
-    let get = DatabaseGet::new(db_provider.clone());
+    let modification = UpdateDatabase::new(registry.clone());
+    let get = DatabaseGet::new(registry);
 
     let document = Document::new(
         String::from("file1.txt"),
@@ -195,7 +242,7 @@ async fn test_database_add_get_one_apply_get_all_without_content() {
     // ---------------------------------------
 
     modification
-        .add(document)
+        .add(id, document)
         .await
         .expect("Failed to add new doc");
 
@@ -203,7 +250,7 @@ async fn test_database_add_get_one_apply_get_all_without_content() {
     // Test: apply_changes()
     // ---------------------------------------
     modification
-        .apply_changes()
+        .apply_changes(id)
         .await
         .expect("Failed to apply changes");
 
@@ -212,7 +259,8 @@ async fn test_database_add_get_one_apply_get_all_without_content() {
     // ---------------------------------------
 
     let result = get
-        .get_one(String::from("file1.txt"))
+        .get_one(id, String::from("file1.txt"))
+        .await
         .expect("Failed to get file");
 
     assert_eq!(result.content, Some(String::from("Hatsune Miku~")));
@@ -221,7 +269,10 @@ async fn test_database_add_get_one_apply_get_all_without_content() {
     // Test: get_all_without_content()
     // ---------------------------------------
 
-    let result = get.get_all_without_content().expect("Failed to get file");
+    let result = get
+        .get_all_without_content(id)
+        .await
+        .expect("Failed to get file");
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].path, "file1.txt");

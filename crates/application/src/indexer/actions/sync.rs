@@ -12,15 +12,17 @@ use tqdm::tqdm;
 use utils::{same_path, to_local_path, trim_custom};
 
 use crate::{
-    indexer::traits::{file_indexer::FileIndexerProvider, text_extractor::TextExtractor},
+    indexer::traits::{
+        file_indexer::FileIndexerProvider,
+        registry::{FileIndexerRegistry, IndexerId},
+        text_extractor::TextExtractor,
+    },
     searcher::{actions::get::DatabaseGet, traits::database::DatabaseProvider},
 };
 
 pub struct FileIndexerSync {
-    indexer: Arc<dyn FileIndexerProvider>,
-    database: Arc<dyn DatabaseProvider>,
+    registry: Arc<dyn FileIndexerRegistry>,
     extractor: Arc<dyn TextExtractor>,
-    folder: String,
 }
 
 impl FileIndexerSync {
@@ -34,17 +36,10 @@ impl FileIndexerSync {
     ///
     /// Returns:
     /// - A SyncFolder
-    pub fn new(
-        indexer: Arc<dyn FileIndexerProvider>,
-        database: Arc<dyn DatabaseProvider>,
-        extractor: Arc<dyn TextExtractor>,
-        folder: String,
-    ) -> Self {
+    pub fn new(registry: Arc<dyn FileIndexerRegistry>, extractor: Arc<dyn TextExtractor>) -> Self {
         return Self {
-            indexer,
-            database,
+            registry,
             extractor,
-            folder,
         };
     }
 
@@ -62,8 +57,9 @@ impl FileIndexerSync {
         file: &PathBuf,
         db_files: &Vec<Document>,
         root: String,
+        indexer: Arc<dyn FileIndexerProvider>,
     ) -> Result<FileOperationNeeded, FileIndexerError> {
-        let timestamp = self.indexer.extract_modified_time(file)?;
+        let timestamp = indexer.extract_modified_time(file)?;
 
         let path = file.to_string_lossy().to_string();
 
@@ -94,11 +90,28 @@ impl FileIndexerSync {
     ///
     /// Returns:
     /// - A list of errors that occurred during the sync process.
-    pub async fn sync(&self) -> Result<Vec<FileIndexerError>, FileIndexerError> {
-        let real_files = self.indexer.get_all_files(self.folder.clone());
+    pub async fn sync(&self, id: IndexerId) -> Result<Vec<FileIndexerError>, FileIndexerError> {
+        let indexer = self
+            .registry
+            .get_indexer(id)
+            .await
+            .ok_or(FileIndexerError::IndexerDeleted)?;
+        let database = self
+            .registry
+            .get_database(id)
+            .await
+            .ok_or(FileIndexerError::IndexerDeleted)?;
+        let folder = self
+            .registry
+            .get_folder(id)
+            .await
+            .ok_or(FileIndexerError::IndexerDeleted)?;
 
-        let db_files = DatabaseGet::new(self.database.clone())
-            .get_all_without_content()
+        let real_files = indexer.get_all_files(folder.clone());
+
+        let db_files = DatabaseGet::new(self.registry.clone())
+            .get_all_without_content(id)
+            .await
             .map_err(|e| FileIndexerError::GetAllDocumentsFailed(e.to_string()))?;
 
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
@@ -110,7 +123,7 @@ impl FileIndexerSync {
         let iterator = real_files.iter();
 
         for file in iterator {
-            let result = self.check_one_file(file, &db_files, self.folder.clone());
+            let result = self.check_one_file(file, &db_files, folder.clone(), indexer.clone());
 
             if let Err(error) = result {
                 all_errors.push(error);
@@ -122,33 +135,57 @@ impl FileIndexerSync {
             }
         }
 
-        self.threaded_sync(&mut all_errors, all_files_to_process)
-            .await?;
+        self.threaded_sync(
+            &mut all_errors,
+            all_files_to_process,
+            indexer,
+            database.clone(),
+            folder.clone(),
+        )
+        .await?;
 
+        self.handle_remove(
+            database.clone(),
+            real_files,
+            db_files,
+            &mut all_errors,
+            folder,
+        )
+        .await;
+
+        database
+            .commit()
+            .await
+            .map_err(|e| FileIndexerError::DatabaseCommitError(e.to_string()))?;
+
+        return Ok(all_errors);
+    }
+
+    async fn handle_remove(
+        &self,
+        database: Arc<dyn DatabaseProvider>,
+        real_files: Vec<PathBuf>,
+        db_files: Vec<Document>,
+        all_errors: &mut Vec<FileIndexerError>,
+        folder: String,
+    ) {
         for db_file in db_files {
             if !real_files
                 .iter()
                 .filter_map(|f| {
-                    f.strip_prefix(self.folder.as_str())
+                    f.strip_prefix(folder.as_str())
                         .map_or(None, |e| Some(e.to_string_lossy().to_string()))
                 })
                 .map(|f| trim_custom(f, MAIN_SEPARATOR_STR))
                 .any(|f| f == db_file.path)
             {
-                let result = self.database.remove_document(db_file.path).await;
+                let result = database.remove_document(db_file.path).await;
 
                 if let Err(error) = result {
                     all_errors.push(FileIndexerError::FailedToRemoveDocument(error.to_string()));
                 }
             }
         }
-
-        self.database
-            .commit()
-            .await
-            .map_err(|e| FileIndexerError::DatabaseCommitError(e.to_string()))?;
-
-        return Ok(all_errors);
     }
 
     /// Local function to process the files in a multi-threaded way.
@@ -161,8 +198,11 @@ impl FileIndexerSync {
         &self,
         all_errors: &mut Vec<FileIndexerError>,
         all_files_to_process: Vec<(PathBuf, FileOperationNeeded)>,
+        indexer: Arc<dyn FileIndexerProvider>,
+        database: Arc<dyn DatabaseProvider>,
+        folder: String,
     ) -> Result<(), FileIndexerError> {
-        let config = self.indexer.get_config();
+        let config = indexer.get_config();
 
         let number_of_threads = config.number_of_threads;
 
@@ -210,7 +250,9 @@ impl FileIndexerSync {
                             file,
                             operation,
                             result,
-                            self.folder.clone(),
+                            folder.clone(),
+                            indexer.clone(),
+                            database.clone(),
                         )
                         .await;
                     } else if let Err(error) = result {
@@ -240,6 +282,8 @@ impl FileIndexerSync {
         operation: FileOperationNeeded,
         file_content_op: Result<String, String>,
         root: String,
+        indexer: Arc<dyn FileIndexerProvider>,
+        database: Arc<dyn DatabaseProvider>,
     ) {
         if let Ok(content) = file_content_op {
             let file_path = file.to_string_lossy().to_string();
@@ -247,7 +291,7 @@ impl FileIndexerSync {
             let local_file_path = to_local_path(file_path.clone(), root);
 
             if let Some(local_file_path) = local_file_path {
-                let timestamp = self.indexer.extract_modified_time(&file);
+                let timestamp = indexer.extract_modified_time(&file);
 
                 if let Ok(timestamp) = timestamp {
                     self.apply_file_changes(
@@ -256,6 +300,7 @@ impl FileIndexerSync {
                         content,
                         all_errors,
                         operation,
+                        database,
                     )
                     .await;
                 } else if let Err(error) = timestamp {
@@ -284,11 +329,11 @@ impl FileIndexerSync {
         content: String,
         all_errors: &mut Vec<FileIndexerError>,
         operation: FileOperationNeeded,
+        database: Arc<dyn DatabaseProvider>,
     ) {
         match operation {
             FileOperationNeeded::Add => {
-                let result = self
-                    .database
+                let result = database
                     .add_document(Document::new(local_file_path, Some(content), timestamp))
                     .await;
                 if let Err(error) = result {
@@ -296,8 +341,7 @@ impl FileIndexerSync {
                 }
             }
             FileOperationNeeded::Update => {
-                let result = self
-                    .database
+                let result = database
                     .update_document(
                         local_file_path.clone(),
                         Document::new(local_file_path, Some(content), timestamp),

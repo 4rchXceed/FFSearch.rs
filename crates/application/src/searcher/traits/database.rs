@@ -4,7 +4,7 @@ use domain::searcher::{document::Document, get_mode::DocumentGetMode, search_que
 use crate::searcher::error::DatabaseError;
 
 #[async_trait]
-pub trait DatabaseProvider {
+pub trait DatabaseProvider: Send + Sync {
     /// Returns the index path
     fn get_index_path(&self) -> String;
 

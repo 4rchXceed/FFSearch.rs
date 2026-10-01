@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use domain::indexer::{config::FileIndexerConfig, error::FileIndexerError};
 
 #[async_trait]
-pub trait FileIndexerProvider {
+pub trait FileIndexerProvider: Send + Sync {
     /// Gets all the files in the indexer's folder
     ///
     /// Returns:

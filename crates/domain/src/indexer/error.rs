@@ -27,4 +27,6 @@ pub enum FileIndexerError {
     GetFileContentError(String),
     #[error("Failed to commit changes to the database: {0}")]
     DatabaseCommitError(String),
+    #[error("Indexer or database deleted / doesn't exist")]
+    IndexerDeleted,
 }

@@ -3,7 +3,7 @@ use domain::ai::message::AIMessage;
 use tokio::sync::mpsc::Sender;
 
 #[async_trait]
-pub trait AiProvider {
+pub trait AiProvider: Send + Sync {
     /// Sends a message to the agent and streams the response.
     ///
     /// Parameters:

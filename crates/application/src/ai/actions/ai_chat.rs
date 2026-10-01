@@ -3,29 +3,36 @@ use std::sync::Arc;
 use domain::ai::message::AIMessage;
 use tokio::sync::{RwLock, mpsc::Sender};
 
-use crate::ai::traits::ai_provider::AiProvider;
+use crate::indexer::traits::registry::{FileIndexerRegistry, IndexerId};
 
 pub struct AiChat {
     messages: Arc<RwLock<Vec<AIMessage>>>,
-    ai: Arc<dyn AiProvider>,
+    registry: Arc<dyn FileIndexerRegistry>,
 }
 
 impl AiChat {
-    pub fn new(ai: Arc<dyn AiProvider>) -> Self {
+    pub fn new(registry: Arc<dyn FileIndexerRegistry>) -> Self {
         return Self {
             messages: Arc::new(RwLock::new(Vec::new())),
-            ai: ai,
+            registry: registry,
         };
     }
 
     pub async fn ask(
         &self,
+        for_indexer: IndexerId,
         query: String,
         msg_sender: Sender<String>,
     ) -> Result<AIMessage, String> {
+        let ai = self
+            .registry
+            .get_agent(for_indexer)
+            .await
+            .ok_or(String::from("File indexer not found / delete"))?
+            .ok_or(String::from("No agent created for this folder"))?;
+
         let (message, response) = {
-            self.ai
-                .ask(query, msg_sender, self.messages.read().await.clone())
+            ai.ask(query, msg_sender, self.messages.read().await.clone())
                 .await?
         };
 

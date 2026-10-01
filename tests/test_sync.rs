@@ -9,7 +9,7 @@ use std::{
 };
 
 use application::{
-    indexer::actions::sync::FileIndexerSync,
+    indexer::{actions::sync::FileIndexerSync, traits::registry::FileIndexerRegistry},
     searcher::{error::DatabaseError, traits::database::DatabaseProvider},
 };
 use domain::{
@@ -17,7 +17,10 @@ use domain::{
     searcher::{config::DatabaseConfig, error::DatabaseDomainError},
 };
 use infrastructure::{
-    indexer::{stdfile::indexer::StdFileIndexerProvider, xberg::extractor::XbergFileExtractor},
+    indexer::{
+        stdfile::{indexer::StdFileIndexerProvider, registry::InMemoryRegistry},
+        xberg::extractor::XbergFileExtractor,
+    },
     searcher::tantivy::database::TantivyDatabase,
 };
 use tempdir::TempDir;
@@ -74,18 +77,19 @@ async fn test_sync_once() {
     let extractor = XbergFileExtractor::new(&FileIndexerConfig::new());
     let extractor = Arc::new(extractor);
 
-    let syncer = FileIndexerSync::new(
-        indexer,
-        db.clone(),
-        extractor,
-        path.to_string_lossy().to_string(),
-    );
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(indexer, db.clone(), path.to_string_lossy().to_string())
+        .await;
+    let registry = Arc::new(registry);
+
+    let syncer = FileIndexerSync::new(registry, extractor);
 
     // ---------------------------------------
     // Tests FileIndexerSync sync()
     // ---------------------------------------
 
-    let errors = syncer.sync().await.expect("Failed to sync");
+    let errors = syncer.sync(id).await.expect("Failed to sync");
     assert!(errors.is_empty());
 
     // ---------------------------------------
@@ -131,18 +135,19 @@ async fn test_sync_twice() {
     let extractor = XbergFileExtractor::new(&FileIndexerConfig::new());
     let extractor = Arc::new(extractor);
 
-    let syncer = FileIndexerSync::new(
-        indexer,
-        db.clone(),
-        extractor,
-        path.to_string_lossy().to_string(),
-    );
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(indexer, db.clone(), path.to_string_lossy().to_string())
+        .await;
+    let registry = Arc::new(registry);
+
+    let syncer = FileIndexerSync::new(registry, extractor);
 
     // ---------------------------------------
     // Tests FileIndexerSync sync()
     // ---------------------------------------
 
-    let errors = syncer.sync().await.expect("Failed to sync");
+    let errors = syncer.sync(id).await.expect("Failed to sync");
     assert!(errors.is_empty());
 
     sleep(Duration::from_secs(2)).await;
@@ -156,7 +161,7 @@ async fn test_sync_twice() {
 
     write_to_file(file2_path.unwrap(), THIRD_FILE_CONTENT);
 
-    let errors = syncer.sync().await.expect("Failed to sync");
+    let errors = syncer.sync(id).await.expect("Failed to sync");
     assert!(errors.is_empty());
 
     let file1 = db.get(String::from("file1.txt"));
@@ -193,18 +198,19 @@ async fn test_sync_remove() {
     let extractor = XbergFileExtractor::new(&FileIndexerConfig::new());
     let extractor = Arc::new(extractor);
 
-    let syncer = FileIndexerSync::new(
-        indexer,
-        db.clone(),
-        extractor,
-        path.to_string_lossy().to_string(),
-    );
+    let registry = InMemoryRegistry::new();
+    let id = registry
+        .add(indexer, db.clone(), path.to_string_lossy().to_string())
+        .await;
+    let registry = Arc::new(registry);
+
+    let syncer = FileIndexerSync::new(registry, extractor);
 
     // ---------------------------------------
     // Tests FileIndexerSync sync()
     // ---------------------------------------
 
-    let errors = syncer.sync().await.expect("Failed to sync");
+    let errors = syncer.sync(id).await.expect("Failed to sync");
     assert!(errors.is_empty());
 
     // ---------------------------------------
@@ -215,7 +221,7 @@ async fn test_sync_remove() {
         .await
         .expect("Failed to remove file");
 
-    let errors = syncer.sync().await.expect("Failed to sync");
+    let errors = syncer.sync(id).await.expect("Failed to sync");
     assert!(errors.is_empty());
 
     let file1 = db.get(String::from("file1.txt"));

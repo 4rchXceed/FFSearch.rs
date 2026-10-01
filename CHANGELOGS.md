@@ -75,3 +75,8 @@ TODO: Re-wrote the manual tests in main
 
 ## Last commit: 98692120bf272a601f416deb3450a68be68b2309
 + Gitlab CI
+
+## Last commit: 4850bebb40fd4ea553b86f81c710c638594cb15a
++ MCP server migrated
++ Test implementation for the MCP server
++ A file indexer registry with an inmemory implementation
