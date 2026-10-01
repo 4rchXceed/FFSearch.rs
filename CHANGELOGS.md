@@ -59,3 +59,36 @@ TODO: Re-wrote the manual tests in main
 + Added unittests for controller
 + Improved other unittests for lisibility
 + NO LONGER USING Arc<RwLock\<FileIndexer>> but LockedController for better architecture
+
+## Last commit: 0b1a9cad2ef5022e4c946db542200892c8363d7d
++ Fixed unittests (some were broken)
++ Added unittests for daemon
+
+## Last commit: 0b1a9cad2ef5022e4c946db542200892c8363d7d
++ Started switching the project to a clean architecture, after alot of thinking
++ I'm using a new branch: clean-arch
+
+## Last commit: f880833aff6ab45ad4a20c5ecf35520b03f4308e
++ Finished to port of the AI part to the clean architecture
++ Tests for file indexer / sync / text extractor
++ Test implementation for AI
+
+## Last commit: 98692120bf272a601f416deb3450a68be68b2309
++ Gitlab CI
+
+## Last commit: 4850bebb40fd4ea553b86f81c710c638594cb15a
++ MCP server migrated
++ Test implementation for the MCP server
++ A file indexer registry with an inmemory implementation
+
+## Last commit: 34c0913b96506fb9c32b9db130f70f9e781026ae
++ Fixed Gitlab CI/CD pipeline: using write_all instead of write
++ Migrated daemon worker
++ Migrated daemon manager
++ Unittests for worker + manager
++ Minor changes
+
+## Last commit: e89d9b6acbfd7c4ebf9463f003dc2e9cb613e646
++ Fixed pipeline (was still broken)
++ Added settings
++ Added unittests for the settings

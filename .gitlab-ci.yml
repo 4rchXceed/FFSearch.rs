@@ -1,0 +1,8 @@
+stages:
+  - test
+
+rust-latest:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo test --verbose --features daemon_worker

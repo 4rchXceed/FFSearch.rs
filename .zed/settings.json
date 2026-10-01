@@ -3,7 +3,7 @@
     "rust-analyzer": {
       "initialization_options": {
         "cargo": {
-          "features": ["daemon", "ai", "mcp"]
+          "features": ["ai", "mcp_server", "daemon_worker"]
         }
       }
     }
