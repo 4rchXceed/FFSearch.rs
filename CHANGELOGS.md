@@ -80,3 +80,10 @@ TODO: Re-wrote the manual tests in main
 + MCP server migrated
 + Test implementation for the MCP server
 + A file indexer registry with an inmemory implementation
+
+## Last commit: 34c0913b96506fb9c32b9db130f70f9e781026ae
++ Fixed Gitlab CI/CD pipeline: using write_all instead of write
++ Migrated daemon worker
++ Migrated daemon manager
++ Unittests for worker + manager
++ Minor changes

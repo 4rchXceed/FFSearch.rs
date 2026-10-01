@@ -2,7 +2,7 @@
 resolver = "3"
 members = [
     "crates/application",
-    "crates/domain",
+    "crates/domain", "crates/frontends/daemon",
     "crates/frontends/mcp",
     "crates/infrastructure",
     # "crates/ports/tantivy",
@@ -19,10 +19,15 @@ version = "0.0.0"
 infrastructure = { path = "crates/infrastructure" }
 application = { path = "crates/application" }
 domain = { path = "crates/domain" }
-tempdir = "0.3.7"
 tokio = { version = "1.53.1", features = ["full"] }
 mcp = { path = "crates/frontends/mcp", optional = true }
+daemon = { path = "crates/frontends/daemon", optional = true }
 
 [features]
 ai=["infrastructure/ai"]
 mcp_server=["mcp"]
+daemon_worker=["daemon"]
+
+[dev-dependencies]
+tempdir = "0.3.7"
+simple_logger = "5.2.0"

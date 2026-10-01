@@ -18,7 +18,7 @@ async fn test_text_extractor_palin_txt() {
     File::create(file_path.clone())
         .await
         .expect("Failed to create file")
-        .write(b"Hatsuneeeee")
+        .write_all(b"Hatsuneeeee")
         .await
         .expect("Failed to write file");
 
@@ -50,7 +50,7 @@ async fn test_extract_docx() {
     File::create(file_path.clone())
         .await
         .expect("Failed to create file")
-        .write(include_bytes!("./sample_datas/test_text_extractor.docx"))
+        .write_all(include_bytes!("./sample_datas/test_text_extractor.docx"))
         .await
         .expect("Failed to write to file");
 

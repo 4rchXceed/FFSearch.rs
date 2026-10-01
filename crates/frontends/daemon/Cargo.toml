@@ -1,0 +1,12 @@
+[package]
+name = "daemon"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.53.1", features = ["full"] }
+application = { path = "../../application" }
+domain = { path = "../../domain" }
+utils = { path = "../../utils" }
+notify = { version="8.2.0" }
+log = "0.4.34"

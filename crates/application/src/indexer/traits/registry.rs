@@ -11,6 +11,11 @@ pub type IndexerId = u32;
 
 #[async_trait]
 pub trait FileIndexerRegistry: Send + Sync {
+    /// Adds a folder to the registry.
+    /// Parameters:
+    /// - file_indexer: the file indexer
+    /// - db: the database
+    /// - folder: the folder's path
     async fn add(
         &self,
         file_indexer: Arc<dyn FileIndexerProvider>,

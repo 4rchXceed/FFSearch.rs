@@ -1,5 +1,5 @@
 use std::{
-    path::{MAIN_SEPARATOR_STR, PathBuf},
+    path::{MAIN_SEPARATOR_STR, Path, PathBuf},
     sync::Arc,
 };
 
@@ -80,6 +80,41 @@ impl FileIndexerSync {
             return Ok(FileOperationNeeded::Add);
         }
         return Ok(FileOperationNeeded::None);
+    }
+
+    pub async fn index_one_file(
+        &self,
+        id: IndexerId,
+        real_path: String,
+        operation: FileOperationNeeded,
+    ) -> Result<(), String> {
+        let err = String::from("File indexer not found!");
+        let folder_path = self.registry.get_folder(id).await.ok_or(err.clone())?;
+        let indexer = self.registry.get_indexer(id).await.ok_or(err.clone())?;
+        let database = self.registry.get_database(id).await.ok_or(err)?;
+
+        let content = self.extractor.extract(real_path.clone()).await;
+
+        let mut errors = Vec::new();
+
+        self.process_result(
+            &mut errors,
+            Path::new(&real_path).to_path_buf(),
+            operation,
+            content,
+            folder_path,
+            indexer,
+            database.clone(),
+        )
+        .await;
+
+        database.commit().await.map_err(|e| e.to_string())?;
+
+        if let Some(error) = errors.first() {
+            return Err(error.to_string());
+        } else {
+            return Ok(());
+        }
     }
 
     /// Syncs the files in the indexer with the database.

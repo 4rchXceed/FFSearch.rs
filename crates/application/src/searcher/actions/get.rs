@@ -16,8 +16,30 @@ impl DatabaseGet {
         return Self { registry: registry };
     }
 
+    /// Lists the folders with their IDs
+    ///
+    /// Returns:
+    /// - HashMap key => folder ID, value => folder's path
     pub async fn list_folders(&self) -> HashMap<IndexerId, String> {
         return self.registry.list_indexers().await;
+    }
+
+    /// Returns the folder path of an indexer
+    ///
+    /// Returns:
+    /// - the path
+    pub async fn get_folder(&self, for_database: IndexerId) -> Option<String> {
+        return self.registry.get_folder(for_database).await;
+    }
+
+    /// Returns the database folder of an indexer
+    ///
+    /// Returns:
+    /// - database folder (default: get_folder() + ".ffsearch")
+    pub async fn get_db_folder(&self, for_database: IndexerId) -> Option<String> {
+        let database = self.registry.get_database(for_database).await?;
+
+        return Some(database.get_index_path());
     }
 
     /// Gets a document from the database
