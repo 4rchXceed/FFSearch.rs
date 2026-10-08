@@ -5,7 +5,9 @@ members = [
     "crates/domain",
     "crates/frontends/daemon",
     "crates/frontends/mcp",
-    "crates/infrastructure", "crates/settings",
+    "crates/frontends/ui",
+    "crates/infrastructure",
+    "crates/settings",
     "crates/utils",
 ]
 

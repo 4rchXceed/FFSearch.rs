@@ -1,0 +1,137 @@
+use iced_xml::app_manager::state_wrapper::App;
+use iced_xml::dom::api::Dom;
+use iced_xml::dom::query_builder::QueryBuilder;
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::CssRx;
+use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
+use iced_xml::xml_engine::XmlEngine;
+use iced_xml::xml_struct::parser::XmlElement;
+
+use crate::gui::gui_main::DEFAULT_ENGINE_SETTINGS;
+use crate::gui::state::GuiState;
+
+use super::errors::WindowCreationError;
+
+pub struct TasksWindow {
+    qb: QueryBuilder<Self, GuiState>,
+    engine: XmlEngine,
+    #[cfg(debug_assertions)]
+    css_rx: Option<CssRx>,
+}
+
+impl WindowTemplate<Self, GuiState> for TasksWindow {
+    fn get_objects(&mut self) -> Objects<'_, Self, GuiState> {
+        return Objects {
+            engine: &mut self.engine,
+            qb: &mut self.qb,
+            #[cfg(debug_assertions)]
+            css_path: "crates/frontends/ui/styles/mainstyle.css",
+            #[cfg(debug_assertions)]
+            css_watcher_rx: self.css_rx.as_mut(),
+        };
+    }
+
+    fn get_objects_read_only(&self) -> ObjectsReadOnly<'_, Self, GuiState> {
+        return ObjectsReadOnly {
+            engine: &self.engine,
+            qb: &self.qb,
+        };
+    }
+
+    fn get_self(&mut self) -> &mut Self {
+        return self;
+    }
+
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        return self;
+    }
+
+    fn set_css_watcher_rx(&mut self, rx: CssRx) {
+        self.css_rx = Some(rx);
+    }
+}
+
+impl TasksWindow {
+    pub fn new() -> Result<Self, WindowCreationError> {
+        return Ok(Self {
+            qb: QueryBuilder::new(),
+            engine: XmlEngine::try_new(
+                include_str!("tasks.xml").to_string(),
+                DEFAULT_ENGINE_SETTINGS.clone(),
+            )
+            .map_err(|e| WindowCreationError::EngineCreationError(e))?,
+            css_rx: None,
+        });
+    }
+
+    pub fn reload_tasks(&mut self, app: &mut App<GuiState>) {
+        if let Ok(tasks) = app.state.tasks.lock() {
+            let mut task_list = XmlElement::void();
+
+            task_list.set_tag("Row");
+            task_list.set_id("tasks-list");
+
+            for task in tasks.iter() {
+                let mut child = XmlElement::void();
+
+                child.set_tag("Row");
+
+                let mut status_label = XmlElement::void();
+
+                status_label.set_tag("Label");
+                status_label.add_class("row-status");
+                status_label.set_text(if let Some(result) = &task.result {
+                    if result.success { "✅" } else { "❌" }
+                } else {
+                    "⏳"
+                });
+
+                child.append_child(status_label);
+
+                let mut text_label = XmlElement::void();
+
+                text_label.set_tag("Label");
+                text_label.set_text(
+                    if let Some(result) = &task.result {
+                        if let Some(error) = &result.error {
+                            format!("Task \"{}\" failed: {}", task.name, error)
+                        } else {
+                            format!("Task \"{}\" ran successfully!", task.name)
+                        }
+                    } else {
+                        format!("Task \"{}\" running...", task.name)
+                    }
+                    .as_str(),
+                );
+
+                child.append_child(text_label);
+
+                task_list.append_child(child);
+            }
+
+            if tasks.is_empty() {
+                let mut empty_label = XmlElement::void();
+
+                empty_label.set_tag("Label");
+                empty_label.set_text("No tasks running ^.^");
+
+                task_list.append_child(empty_label);
+            }
+
+            self.qb
+                .b(Dom::get_element_by_id("tasks-list").replace(Box::new(task_list)));
+
+            self.process();
+        }
+    }
+
+    pub fn post_create(&mut self, app: &mut App<GuiState>) {
+        self.reload_tasks(app);
+
+        self.qb.set_interval(500).with_callback(|this, _, app| {
+            this.reload_tasks(app);
+        });
+
+        self.process();
+    }
+}

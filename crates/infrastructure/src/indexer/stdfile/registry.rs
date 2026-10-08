@@ -101,4 +101,16 @@ impl FileIndexerRegistry for InMemoryRegistry {
 
         return Some(indexers.get(&id)?.folder.clone());
     }
+
+    async fn remove(&self, id: IndexerId) -> Result<(), ()> {
+        let mut indexers = self.file_indexers.write().await;
+
+        if indexers.contains_key(&id) {
+            indexers.remove(&id);
+
+            return Ok(());
+        }
+
+        return Err(());
+    }
 }

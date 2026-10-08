@@ -315,7 +315,7 @@ impl FileIndexerSync {
         all_errors: &mut Vec<FileIndexerError>,
         file: PathBuf,
         operation: FileOperationNeeded,
-        file_content_op: Result<String, String>,
+        file_content_op: Result<Option<String>, String>,
         root: String,
         indexer: Arc<dyn FileIndexerProvider>,
         database: Arc<dyn DatabaseProvider>,
@@ -329,15 +329,17 @@ impl FileIndexerSync {
                 let timestamp = indexer.extract_modified_time(&file);
 
                 if let Ok(timestamp) = timestamp {
-                    self.apply_file_changes(
-                        timestamp,
-                        local_file_path,
-                        content,
-                        all_errors,
-                        operation,
-                        database,
-                    )
-                    .await;
+                    if let Some(content) = content {
+                        self.apply_file_changes(
+                            timestamp,
+                            local_file_path,
+                            content,
+                            all_errors,
+                            operation,
+                            database,
+                        )
+                        .await;
+                    }
                 } else if let Err(error) = timestamp {
                     all_errors.push(error);
                 }
