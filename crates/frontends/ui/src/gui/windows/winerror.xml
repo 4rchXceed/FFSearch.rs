@@ -1,0 +1,3 @@
+<Window>
+    <Label id="error-msg">Unknown error</Label>
+</Window>

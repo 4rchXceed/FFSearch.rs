@@ -1,0 +1,40 @@
+<Window>
+    <Div id="root">
+        <Col>
+            <Float>
+                <Button>Settings</Button>
+            </Float>
+            <Col>
+                <Label classes="title">FFSearch.rs</Label>
+                <Label classes="subtitle">Search your files without waiting for a decade</Label>
+            </Col>
+            <Col>
+                <Row>
+                    <Input id="search-query" placeholder="Search something..."></Input>
+                    <Select id="folder-select" classes="folders-list" placeholder="And select a folder"></Select>
+                </Row>
+                <Input id="search-limit" placeholder="Max number of documents">100</Input>
+                <Button id="search-btn">Search</Button>
+                <Label id="search-status"></Label>
+            </Col>
+            <Col>
+                <Button id="add-folder-btn">Add a folder</Button>
+                <Label id="add-folder-status"></Label>
+            </Col>
+            <Col>
+                <Label>Folders:</Label>
+                <Row>
+                    <Select classes="folders-list" id="actions-select" placeholder="Select a folder"></Select>
+                    <Button id="sync-btn">Update files</Button>
+                    <Button id="delete-btn">Remove</Button>
+                </Row>
+                <Label id="actions-status"></Label>
+            </Col>
+            <Label id="startup-errors"></Label>
+            <Col>
+                <Label id="tasks">Tasks loading...</Label>
+            </Col>
+        </Col>
+    </Div>
+</Window>
+

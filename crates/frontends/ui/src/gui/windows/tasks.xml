@@ -1,0 +1,5 @@
+<Window>
+    <Row id="tasks-list">
+        <Row><Label classes="row-status">❌</Label><Label>Success</Label></Row>
+    </Row>
+</Window>

@@ -1,0 +1,30 @@
+Label {
+    fg: rgb(0, 39, 0);
+}
+
+Button {
+    border-width: 3;
+    border-color: rgb(225,40,133);
+    border-radius: 5;
+    width: min;
+    padding: 10;
+    bg: rgb(134,206,203);
+}
+
+Button::virtuals {
+    fg: rgb(55,59,62);
+}
+
+/*
+Window {
+    width: max;
+    height: max;
+    clip: true;
+}
+
+#root {
+    bg: rgb(190,200,209);
+    width: max;
+    height: 400f;
+}
+*/

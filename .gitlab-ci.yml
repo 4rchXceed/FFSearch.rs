@@ -5,4 +5,4 @@ rust-latest:
   stage: test
   image: rust:latest
   script:
-    - cargo test --verbose --features daemon_worker
+    - cargo test --verbose --features daemon_worker,ai,mcp_server

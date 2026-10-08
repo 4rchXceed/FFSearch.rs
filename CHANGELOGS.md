@@ -21,7 +21,7 @@
 ~ Added error messages (via thiserror)
 + Added improvements on indection
 
-## Last commit: 7eed571d4bb0dbedb3b9ffeae14e98dd716148ad~
+## Last commit: 7eed571d4bb0dbedb3b9ffeae14e98dd716148ad
 - Switched from not_null_check & not_err_check macros to ".?" operator
 + Added MCP server + test (thread-safe)
 + Added multithreading for indexion
@@ -92,3 +92,12 @@ TODO: Re-wrote the manual tests in main
 + Fixed pipeline (was still broken)
 + Added settings
 + Added unittests for the settings
+
+## Last commit: a2ecdd819e93635ad3b84ce92ad02ea440882eea
++ Started the UI frontend
++ Started coding with iced-xml
++ Finished the system tray
++ Homepage almost finished
++ Task system / visualizer
++ Sync & remove sync folder button
++ Add new sync folder button

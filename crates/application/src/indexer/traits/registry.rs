@@ -22,6 +22,7 @@ pub trait FileIndexerRegistry: Send + Sync {
         db: Arc<dyn DatabaseProvider>,
         folder: String,
     ) -> IndexerId;
+    async fn remove(&self, id: IndexerId) -> Result<(), ()>;
 
     async fn assign_agent(&self, id: IndexerId, agent: Arc<dyn AiProvider>) -> Result<(), ()>;
 
