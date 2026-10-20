@@ -3,6 +3,7 @@ pub enum WindowType {
     HomeWindow,
     ErrorWindow(String),
     TasksWindow,
+    SettingsWindow,
 }
 
 #[derive(Clone)]
@@ -23,6 +24,13 @@ impl WindowParams {
         return Self {
             wintype: WindowType::HomeWindow,
             startup_errors: errors,
+        };
+    }
+
+    pub fn settings() -> Self {
+        return Self {
+            wintype: WindowType::SettingsWindow,
+            startup_errors: Vec::new(),
         };
     }
 }

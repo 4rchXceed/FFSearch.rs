@@ -19,6 +19,7 @@ use wait::Waitable;
 
 use crate::errors::{AppError, show_error};
 use crate::gui::gui_main::{DEFAULT_ENGINE_SETTINGS, Window};
+use crate::gui::params::WindowParams;
 use crate::gui::state::GuiState;
 use crate::manager::Task;
 
@@ -246,7 +247,7 @@ impl HomeWindow {
         self.qb
             .b(Dom::get_element_by_id("delete-btn").add_event_listener(EventListenerTypes::Click))
             .with_callback(|this, _, app| {
-                if let Some(id) = this.get_u32("actions-select", "value") {                   
+                if let Some(id) = this.get_u32("actions-select", "value") {
                     if let Ok(mut settings) = app.state.settings.lock()
                         && let Some(folder) = &app.state.registry.get_folder(id).wait()
                         && settings.file_indexers.contains_key(folder)
@@ -292,6 +293,14 @@ impl HomeWindow {
             self.qb
                 .b(Dom::get_element_by_id("tasks").set_property("text", &format!("Error: {e}")));
         }
+
+        self.qb
+            .b(Dom::get_element_by_id("open-settings")
+                .add_event_listener(EventListenerTypes::Click))
+            .with_callback(|this, _, app| {
+                this.qb.open_window(Box::new(WindowParams::settings()), app);
+                this.process();
+            });
 
         self.process();
 

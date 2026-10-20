@@ -2,7 +2,7 @@
     <Div id="root">
         <Col>
             <Float>
-                <Button>Settings</Button>
+                <Button id="open-settings">Settings</Button>
             </Float>
             <Col>
                 <Label classes="title">FFSearch.rs</Label>

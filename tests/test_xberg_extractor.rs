@@ -37,7 +37,7 @@ async fn test_text_extractor_palin_txt() {
         .await;
 
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "Hatsuneeeee");
+    assert_eq!(result.unwrap().unwrap(), "Hatsuneeeee");
 }
 
 #[tokio::test]
@@ -72,5 +72,5 @@ async fn test_extract_docx() {
         .extract(file_path.to_string_lossy().to_string())
         .await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap(), "Hatsune\u{a0}Miku~");
+    assert_eq!(result.unwrap().unwrap(), "Hatsune\u{a0}Miku~");
 }

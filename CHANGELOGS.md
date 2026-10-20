@@ -101,3 +101,8 @@ TODO: Re-wrote the manual tests in main
 + Task system / visualizer
 + Sync & remove sync folder button
 + Add new sync folder button
+
+## Last commit: 9587047b0cbef08b80f83bff619d524152753803
++ Finished the base settings window
+
+TODO: Recode the system tray, the lib used sucks and doesn't work

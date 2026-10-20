@@ -16,7 +16,7 @@ wait = "0.2.6"
 rfd = "0.17.2"
 tokio = { version = "1.53.1", features = ["full"] }
 # iced-xml = { git = "https://github.com/4rchXceed/iced-xml", branch = "code-rewrite" }
-iced-xml = { path = "E:\\Corbeille\\iced-xml" }
+iced-xml = { path = "../../../../../../Corbeille/iced-xml/" }
 
 # FFSearch crates
 settings = { path = "../../settings" }
@@ -32,5 +32,4 @@ dev = ["iced-xml/css-watcher"]
 
 [dev-dependencies]
 # iced-xml = { git = "https://github.com/4rchXceed/iced-xml", branch = "code-rewrite", features = ["css-watcher"] }
-iced-xml = { path = "E:\\Corbeille\\iced-xml", features = ["css-watcher"] }
-
+iced-xml = { path = "../../../../../../Corbeille/iced-xml/", features = ["css-watcher"] }

@@ -1,4 +1,6 @@
 <Window>
-    <Col>
-    </Col>
+    <Label>Folder-specific settings:</Label>
+    <Col id="folders-settings"></Col>
+    <Button id="save">Save settings</Button>
+    <Label id="status"></Label>
 </Window>

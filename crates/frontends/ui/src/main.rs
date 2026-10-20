@@ -43,6 +43,8 @@ async fn main_safe() -> Result<(), AppError> {
 
     let mut manager = AppManager::new(config_path.clone()).await?;
 
+    manager.open_ui();
+
     loop {
         match recv.recv() {
             Ok(msg) => match msg {

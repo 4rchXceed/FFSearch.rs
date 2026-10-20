@@ -9,6 +9,7 @@ use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::app_manager::utils::WindowId;
 use iced_xml::window_manager;
 use iced_xml::window_wrapper::AppResult;
+use iced_xml::xml_struct::parser::XmlElement;
 use settings::settings::Settings;
 
 use crate::manager::{RunningTask, Task};
@@ -17,13 +18,14 @@ use super::params::{WindowParams, WindowType};
 use super::state::GuiState;
 use super::windows::errors::WindowCreationError;
 use super::windows::home::HomeWindow;
+use super::windows::settings::SettingsWindow;
 use super::windows::tasks::TasksWindow;
 use super::windows::winerror::ErrorWindow;
 
 fn create_window_safe(
     params: WindowParams,
     app: &mut App<GuiState>,
-    win_id: WindowId,
+    _win_id: WindowId,
 ) -> Result<Window, WindowCreationError> {
     let window = match params.wintype {
         WindowType::HomeWindow => {
@@ -47,9 +49,25 @@ fn create_window_safe(
 
             Window::TasksWindow(win)
         }
+        WindowType::SettingsWindow => {
+            let mut win = SettingsWindow::new()?;
+
+            win.post_create(app);
+
+            Window::SettingsWindow(win)
+        }
     };
 
     return Ok(window);
+}
+
+pub fn text(text: &str) -> XmlElement {
+    let mut label = XmlElement::void();
+
+    label.set_tag("Label");
+    label.set_text(text);
+
+    return label;
 }
 
 fn create_window(params: WindowParams, state: &mut App<GuiState>, win_id: WindowId) -> Window {
@@ -64,7 +82,8 @@ fn create_window(params: WindowParams, state: &mut App<GuiState>, win_id: Window
 window_manager!(Window {
     HomeWindow,
     ErrorWindow,
-    TasksWindow
+    TasksWindow,
+    SettingsWindow
 }; GuiState; WindowParams);
 
 impl Window {
