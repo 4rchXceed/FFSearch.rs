@@ -5,7 +5,7 @@ use iced_xml::dom::query_builder::QueryBuilder;
 use iced_xml::window_wrapper::CssRx;
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
-use iced_xml::xml_struct::parser::XmlElement;
+use iced_xml::xml_struct::xml_element::XmlElement;
 
 use crate::gui::gui_main::DEFAULT_ENGINE_SETTINGS;
 use crate::gui::state::GuiState;

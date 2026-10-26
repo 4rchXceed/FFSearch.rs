@@ -18,20 +18,13 @@ async fn main_safe() -> Result<(), AppError> {
 
     let (sender, recv) = std::sync::mpsc::channel::<MenuAction>();
 
-    std::thread::spawn(move || {
-        let mut tray = match FFSearchTray::new(sender) {
-            Ok(t) => t,
-            Err(e) => {
-                show_error(e);
-                return;
-            }
-        };
-
-        match tray.run() {
-            Ok(_) => {}
-            Err(e) => show_error(e),
+    // MacOS support dropped for now: https://github.com/olback/tray-item-rs/ -> * MacOS does not allow running applications in threads other than main, meaning that it is not possible to listen for events in a new thread. See the macos.rs example for a how-to.
+    let mut tray = match FFSearchTray::new(sender) {
+        Ok(t) => t,
+        Err(e) => {
+            return Err(e);
         }
-    });
+    };
 
     let args: Vec<String> = std::env::args().collect();
 

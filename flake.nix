@@ -43,9 +43,11 @@
           pkgs.cargo
           pkgs.protobuf
           pkgs.openssl
-
-        ];
-        buildInputs = with pkgs; [
+          pkgs.dbus.lib
+          pkgs.dbus
+    ];
+    
+    buildInputs = with pkgs; [
           stdenv.cc
           rust-analyzer
           expat
@@ -67,15 +69,18 @@
           openssl
           bzip2
           clang
-        ];
-
-        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+          dbus.lib
+          dbus
+    ];
+    # Temporary fix for dbus, the time my machine compiles and update my NixOS config
+    LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
           pkgs.vulkan-loader
           pkgs.libGL
           pkgs.libx11
           pkgs.wayland
           pkgs.libxkbcommon
-        ];
-      };
+          pkgs.dbus.lib
+    ];
     };
+   };
 }

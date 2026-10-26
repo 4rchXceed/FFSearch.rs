@@ -126,7 +126,7 @@ impl HomeWindow {
 
     pub fn reload_select(&mut self, app: &mut App<GuiState>) {
         self.qb.b(Dom::get_elements_by_class("folders-list")
-            .fire_event(CustomElementEvent::ClearSelectOptions));
+            .fire_event(CustomElementEvent::ClearSelectOptions()));
 
         let indexers = app.state.registry.list_indexers().wait();
 

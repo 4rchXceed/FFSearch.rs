@@ -9,8 +9,7 @@ use iced_xml::dom::query_builder::{EventResponse, QueryBuilder};
 use iced_xml::window_wrapper::CssRx;
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
-use iced_xml::xml_struct::element_renderer::ElementEventResponse;
-use iced_xml::xml_struct::parser::XmlElement;
+use iced_xml::xml_struct::xml_element::XmlElement;
 use log::{info, warn};
 use wait::Waitable;
 
@@ -151,7 +150,7 @@ impl SettingsWindow {
             self.qb.b(&mut Dom::from(sel).get_data("folder-id"));
 
             let datas = self.process();
-            
+
             return datas.data_str;
         }
 

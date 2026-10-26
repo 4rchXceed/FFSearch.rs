@@ -106,3 +106,10 @@ TODO: Re-wrote the manual tests in main
 + Finished the base settings window
 
 TODO: Recode the system tray, the lib used sucks and doesn't work
+
+## Last commit: 5dd78569a66e8c1183d52eea1f2a466e082a8fd9
++ Replaced the system tray lib with a better one (tray-item)
+
+TODO: Test on Windows
+
+

@@ -9,7 +9,7 @@ use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::app_manager::utils::WindowId;
 use iced_xml::window_manager;
 use iced_xml::window_wrapper::AppResult;
-use iced_xml::xml_struct::parser::XmlElement;
+use iced_xml::xml_struct::xml_element::XmlElement;
 use settings::settings::Settings;
 
 use crate::manager::{RunningTask, Task};

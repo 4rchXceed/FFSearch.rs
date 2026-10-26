@@ -8,7 +8,7 @@ pub enum AppError {
     #[error("Failed to load the tray icon: {0}. Application cannot start.")]
     TrayIconLoadError(IconCreationError),
     #[error("Failed to build the system tray: {0}. Application cannot start.")]
-    FailedToBuildTrayIcon(tray::Error),
+    FailedToBuildTrayIcon(String),
     #[error(
         "Communication with/from system icon tray is closed / has an error, application needs to be closed"
     )]

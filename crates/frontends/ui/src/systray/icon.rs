@@ -1,29 +1,31 @@
 use std::io::Cursor;
 
-use image::ImageReader;
-use tray::Icon;
+use tray_item::IconSource;
 
 use crate::{systray::errors::IconCreationError, tray_resource};
 
-pub fn load_icon() -> Result<Icon, IconCreationError> {
-    let image = ImageReader::new(Cursor::new(tray_resource!(icon.png)))
-        .with_guessed_format()
-        .map_err(|e| IconCreationError::CouldNotDetectIconFormat(e.to_string()))?;
+#[cfg(not(target_os = "windows"))]
+pub fn load_icon_linux() -> Result<IconSource, IconCreationError> {
+    let cursor = Cursor::new(tray_resource!(icon.png));
 
-    // let dimensions = image
-    //     .into_dimensions()
-    //     .map_err(|e| IconCreationError::CouldNotReadIconDimensions(e.to_string()))?;
-
-    let image_decoded = image
-        .decode()
+    let decoder = image::codecs::png::PngDecoder::new(cursor)
         .map_err(|e| IconCreationError::CouldNotDecodeIcon(e.to_string()))?;
 
-    let rgba = image_decoded.to_rgba8();
+    let buffer = image::DynamicImage::from_decoder(decoder)
+        .map_err(|e| IconCreationError::InvalidIcon(e.to_string()))?;
 
-    return Icon::from_rgba(
-        rgba.as_raw().clone(),
-        image_decoded.width(),
-        image_decoded.height(),
-    )
-    .map_err(|e| IconCreationError::InvalidIcon(e.to_string()));
+    let icon_source = IconSource::Data {
+        height: buffer.height() as i32,
+        width: buffer.width() as i32,
+        data: buffer.to_rgba8().into_raw(),
+    };
+
+    return Ok(icon_source);
+}
+
+#[cfg(target_os = "windows")]
+pub fn load_icon_windows() -> Result<IconSource, IconCreationError> {
+    let icon_source = IconSource::Resource("tray-icon");
+
+    return Ok(icon_source);
 }
