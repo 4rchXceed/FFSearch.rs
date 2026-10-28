@@ -1,9 +1,27 @@
 <Window>
-    <Label>File details</Label>
-    <Label id="filename">File: Error: could not load script</Label>
+    <Div id="root">
+        <Col>
+            <Col>
+                <Center>
+                    <Label classes="title">File details</Label>
+                </Center>
+                <Center id="filename">File: Error: could not load script</Center> <!-- Normally:
+                "For:
+                XYZ" -->
+            </Col>
 
-    <Scroll>
-        <!-- TODO: Add a highlight for where the searched term is -->
-        <Label id="content">Could not load file content: Unknown Error</Label>
-    </Scroll>
+            <Space classes="default-space-size" />
+            <Div classes="hr">
+                <Void />
+            </Div>
+            <Space classes="default-space-size" />
+
+            <Div classes="box-border-white">
+                <Scroll>
+                    <!-- TODO: Add a highlight for where the searched term is -->
+                    <Label id="content">Could not load file content: Unknown Error</Label>
+                </Scroll>
+            </Div>
+        </Col>
+    </Div>
 </Window>

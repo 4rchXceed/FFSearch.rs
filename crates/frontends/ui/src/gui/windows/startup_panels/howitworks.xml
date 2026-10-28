@@ -1,8 +1,14 @@
 <Col>
-    <Label>How does this work?</Label>
+    <Label classes="smaller-title">How does this work?</Label>
+            
+    <Space classes="default-space-size" />
+    <Space classes="default-space-size" />
 
     <Label>FFSearch works by creating a database of the text inside your files</Label>
+    <Space classes="default-space-size" />
     <Label>It creates a ".ffsearch" folder inside the folder you want to add</Label>
+    <Space classes="default-space-size" />
     <Label>This folder contains the database for the text, so the program doesn't need to search through your files</Label>
+    <Space classes="default-space-size" />
     <Label>To synchronise with the real files, you need to select the folder you want to sync and click the "Update Files" button</Label>
 </Col>

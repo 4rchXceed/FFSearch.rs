@@ -121,3 +121,6 @@ TODO: Test on Windows
 + Bugfixes
 + Gitea Action: https://git.webdash.dev/ArchXceed/FFSearch.rs
 
+## Last commit: 1f42e12a9eba9037bed4fd80519e14ce8d53e8e3
++ Made the CSS / Styling for every window
+

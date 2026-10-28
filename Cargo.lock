@@ -4222,7 +4222,7 @@ dependencies = [
 [[package]]
 name = "iced-xml"
 version = "0.1.0"
-source = "git+https://github.com/4rchXceed/iced-xml?branch=code-rewrite#7d2649d5ad12a2dbc51207ad4bab1a959b13c911"
+source = "git+https://github.com/4rchXceed/iced-xml?branch=code-rewrite#be64bafdc852e96e665884bfc55a1ff80a6109b9"
 dependencies = [
  "iced",
  "log",

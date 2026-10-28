@@ -5,7 +5,9 @@ use iced_xml::dom::api::Dom;
 use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query_builder::QueryBuilder;
 #[cfg(debug_assertions)]
-use iced_xml::window_wrapper::CssRx;
+use iced_xml::utils::watch_css::watch_css_file;
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::{CssRx, CssWatcher};
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use iced_xml::xml_struct::xml_element::XmlElement;
@@ -22,6 +24,8 @@ pub struct ResultsWindow {
     engine: XmlEngine,
     #[cfg(debug_assertions)]
     css_rx: Option<CssRx>,
+    #[cfg(debug_assertions)]
+    css_watcher: Option<CssWatcher>,
     current_indexer: IndexerId,
 }
 
@@ -69,6 +73,8 @@ impl ResultsWindow {
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
             #[cfg(debug_assertions)]
             css_rx: None,
+            #[cfg(debug_assertions)]
+            css_watcher: None,
             current_indexer: current_indexer,
         });
     }
@@ -150,5 +156,18 @@ impl ResultsWindow {
         self.process();
 
         self.update_results(results, query);
+
+        #[cfg(debug_assertions)]
+        match watch_css_file(self, 1000) {
+            Err(e) => {
+                crate::errors::show_error(crate::errors::AppError::LazyError(e.to_string()));
+            }
+            Ok(w) => self.css_watcher = Some(w),
+        };
+
+        #[cfg(not(debug_assertions))]
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
+
+        self.process();
     }
 }

@@ -8,6 +8,7 @@ use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use iced_xml::xml_struct::parser::try_xml;
 
+use crate::gui::css::CSS;
 use crate::gui::gui_main::{DEFAULT_ENGINE_SETTINGS, text};
 use crate::gui::state::GuiState;
 
@@ -92,6 +93,8 @@ impl StartupWindow {
         self.qb
             .b(Dom::get_element_by_id("panel").replace(Box::new(element)));
 
+        self.qb.import_css(CSS.to_string(), false);
+
         self.process();
     }
 
@@ -102,7 +105,13 @@ impl StartupWindow {
             .b(Dom::get_element_by_id("next").add_event_listener(EventListenerTypes::Click))
             .with_callback(|this, _, app| {
                 match this.current_panel {
-                    Panels::Welcome => this.current_panel = Panels::HowItWorks,
+                    Panels::Welcome => {
+                        this.qb.b(Dom::get_element_by_id("next").set_property("text", "Finish"));
+
+                        this.process();
+
+                        this.current_panel = Panels::HowItWorks;
+                    }
                     Panels::HowItWorks => {
                         this.qb.close_window(this.me_winid, app);
                         return;

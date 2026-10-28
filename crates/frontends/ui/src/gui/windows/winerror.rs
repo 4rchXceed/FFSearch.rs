@@ -68,6 +68,8 @@ impl ErrorWindow {
         self.qb
             .b(Dom::get_element_by_id("error-msg").set_property("text", error.as_str()));
 
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
+
         self.process();
     }
 }

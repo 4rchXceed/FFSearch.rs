@@ -5,7 +5,9 @@ use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query::DomQuery;
 use iced_xml::dom::query_builder::{EventResponse, QueryBuilder};
 #[cfg(debug_assertions)]
-use iced_xml::window_wrapper::CssRx;
+use iced_xml::utils::watch_css::watch_css_file;
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::{CssRx, CssWatcher};
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use iced_xml::xml_struct::xml_element::XmlElement;
@@ -21,6 +23,8 @@ pub struct SettingsWindow {
     engine: XmlEngine,
     #[cfg(debug_assertions)]
     css_rx: Option<CssRx>,
+    #[cfg(debug_assertions)]
+    css_watcher: Option<CssWatcher>,
 }
 
 impl WindowTemplate<Self, GuiState> for SettingsWindow {
@@ -67,6 +71,8 @@ impl SettingsWindow {
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
             #[cfg(debug_assertions)]
             css_rx: None,
+            #[cfg(debug_assertions)]
+            css_watcher: None,
         });
     }
 
@@ -103,12 +109,14 @@ impl SettingsWindow {
     pub fn single_folder_settings(path: String, cfg: FileIndexerConfig) -> XmlElement {
         let mut container = XmlElement::void();
         container.set_tag("Col");
+        container.add_class("single-settings");
         container.append_child(text(&format!("Settings for {path}")));
 
         let mut indexer_settings = XmlElement::void();
         indexer_settings.set_tag("Col");
+        indexer_settings.add_class("subsettings");
 
-        indexer_settings.append_child(text("Indexer settngs"));
+        indexer_settings.append_child(text("Indexer settings"));
         indexer_settings.append_child(Self::input(
             "Number of concurrent processes",
             cfg.number_of_threads.to_string(),
@@ -293,7 +301,6 @@ impl SettingsWindow {
     pub fn post_create(&mut self, app: &mut App<GuiState>) {
         let mut main = XmlElement::void();
         main.set_tag("Col");
-        main.append_child(text("All these settings require restarting the app!"));
 
         if let Ok(settings) = app.state.settings.lock() {
             for (path, indexer_cfg) in &settings.file_indexers {
@@ -310,6 +317,19 @@ impl SettingsWindow {
         self.qb
             .b(Dom::get_element_by_id("save").add_event_listener(EventListenerTypes::Click))
             .with_callback(Self::save);
+
+        self.process();
+
+        #[cfg(debug_assertions)]
+        match watch_css_file(self, 1000) {
+            Err(e) => {
+                crate::errors::show_error(crate::errors::AppError::LazyError(e.to_string()));
+            }
+            Ok(w) => self.css_watcher = Some(w),
+        };
+
+        #[cfg(not(debug_assertions))]
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
 
         self.process();
     }

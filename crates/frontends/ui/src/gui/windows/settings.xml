@@ -1,6 +1,27 @@
 <Window>
-    <Label>Folder-specific settings:</Label>
-    <Col id="folders-settings"></Col>
-    <Button id="save">Save settings</Button>
-    <Label id="status"></Label>
+    <Scroll>
+        <Div id="root">
+            <Col>
+                <Col>
+                    <Center>
+                        <Label classes="title">Settings</Label>
+                    </Center>
+                    <Center classes="subtitle">Folder-specific settings</Center>
+                </Col>
+
+                <Space classes="default-space-size" />
+                <Div classes="hr">
+                    <Void />
+                </Div>
+                <Space classes="default-space-size" />
+
+                <Label classes="style-italic">All these settings require restarting the app!</Label>
+                <Scroll>
+                    <Col id="folders-settings"></Col>
+                </Scroll>
+                <Button id="save">Save settings</Button>
+                <Label id="status"></Label>
+            </Col>
+        </Div>
+    </Scroll>
 </Window>

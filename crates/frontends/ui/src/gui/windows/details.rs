@@ -3,7 +3,9 @@ use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
 use iced_xml::dom::query_builder::QueryBuilder;
 #[cfg(debug_assertions)]
-use iced_xml::window_wrapper::CssRx;
+use iced_xml::utils::watch_css::watch_css_file;
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::{CssRx, CssWatcher};
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use wait::Waitable;
@@ -18,6 +20,8 @@ pub struct DetailsWindow {
     engine: XmlEngine,
     #[cfg(debug_assertions)]
     css_rx: Option<CssRx>,
+    #[cfg(debug_assertions)]
+    css_watcher: Option<CssWatcher>,
 }
 
 impl WindowTemplate<Self, GuiState> for DetailsWindow {
@@ -64,6 +68,8 @@ impl DetailsWindow {
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
             #[cfg(debug_assertions)]
             css_rx: None,
+            #[cfg(debug_assertions)]
+            css_watcher: None,
         });
     }
 
@@ -78,6 +84,19 @@ impl DetailsWindow {
 
         self.qb
             .b(Dom::get_element_by_id("content").set_property("text", &content));
+
+        self.process();
+
+        #[cfg(debug_assertions)]
+        match watch_css_file(self, 1000) {
+            Err(e) => {
+                crate::errors::show_error(crate::errors::AppError::LazyError(e.to_string()));
+            }
+            Ok(w) => self.css_watcher = Some(w),
+        };
+
+        #[cfg(not(debug_assertions))]
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
 
         self.process();
     }

@@ -248,6 +248,9 @@ impl HomeWindow {
             Ok(w) => self.css_watcher = Some(w),
         };
 
+        #[cfg(not(debug_assertions))]
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
+
         self.qb
             .b(Dom::get_element_by_id("search-btn").add_event_listener(EventListenerTypes::Click))
             .with_callback(|this, _, app| {
@@ -303,7 +306,7 @@ impl HomeWindow {
             });
 
         let errors_text = if self.errors.is_empty() {
-            ""
+            "App startup complete! No error reported."
         } else {
             &format!(
                 "Some erros were found while starting the app:\n{}",

@@ -2,7 +2,9 @@ use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
 use iced_xml::dom::query_builder::QueryBuilder;
 #[cfg(debug_assertions)]
-use iced_xml::window_wrapper::CssRx;
+use iced_xml::utils::watch_css::watch_css_file;
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::{CssRx, CssWatcher};
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use iced_xml::xml_struct::xml_element::XmlElement;
@@ -17,6 +19,8 @@ pub struct TasksWindow {
     engine: XmlEngine,
     #[cfg(debug_assertions)]
     css_rx: Option<CssRx>,
+    #[cfg(debug_assertions)]
+    css_watcher: Option<CssWatcher>,
 }
 
 impl WindowTemplate<Self, GuiState> for TasksWindow {
@@ -63,6 +67,8 @@ impl TasksWindow {
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
             #[cfg(debug_assertions)]
             css_rx: None,
+            #[cfg(debug_assertions)]
+            css_watcher: None,
         });
     }
 
@@ -72,6 +78,8 @@ impl TasksWindow {
 
             task_list.set_tag("Row");
             task_list.set_id("tasks-list");
+            task_list.apply_css("border-width", "2");
+            task_list.apply_css("border-color", "white");
 
             for task in tasks.iter() {
                 let mut child = XmlElement::void();
@@ -87,6 +95,8 @@ impl TasksWindow {
                 } else {
                     "⏳"
                 });
+                // CSS
+                status_label.apply_css("fg", "white");
 
                 child.append_child(status_label);
 
@@ -106,6 +116,9 @@ impl TasksWindow {
                     .as_str(),
                 );
 
+                // CSS
+                text_label.apply_css("fg", "white");
+
                 child.append_child(text_label);
 
                 task_list.append_child(child);
@@ -116,6 +129,7 @@ impl TasksWindow {
 
                 empty_label.set_tag("Label");
                 empty_label.set_text("No tasks running ^.^");
+                empty_label.apply_css("fg", "white");
 
                 task_list.append_child(empty_label);
             }
@@ -128,6 +142,17 @@ impl TasksWindow {
     }
 
     pub fn post_create(&mut self, app: &mut App<GuiState>) {
+        #[cfg(debug_assertions)]
+        match watch_css_file(self, 1000) {
+            Err(e) => {
+                crate::errors::show_error(crate::errors::AppError::LazyError(e.to_string()));
+            }
+            Ok(w) => self.css_watcher = Some(w),
+        };
+
+        #[cfg(not(debug_assertions))]
+        self.qb.import_css(crate::gui::css::CSS.to_string(), false);
+
         self.reload_tasks(app);
 
         self.qb.set_interval(500).with_callback(|this, _, app| {

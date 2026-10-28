@@ -1,11 +1,26 @@
 <Window>
-    <Label>Search results</Label>
-    <Label id="results-label">Error: script not loaded</Label> <!-- Normally: "For: XYZ" -->
+    <Div id="root">
+        <Col>
+            <Col>
+                <Center>
+                    <Label classes="title">Search results</Label>
+                </Center>
+                <Center id="results-label">Error: script not loaded</Center> <!-- Normally: "For:
+                XYZ" -->
+            </Col>
 
-    <!-- TODO: Search input as Component -->
-    <Scroll>
-        <Col id="results">
-            <!-- Example: <Row><Label>path/to/file</Label><Button>Details</Button></Row> -->
+            <Space classes="default-space-size" />
+            <Div classes="hr">
+                <Void />
+            </Div>
+            <Space classes="default-space-size" />
+
+            <!-- TODO: Search input as Component -->
+            <Scroll>
+                <Col id="results">
+                    <!-- Example: <Row><Label>path/to/file</Label><Button>Details</Button></Row> -->
+                </Col>
+            </Scroll>
         </Col>
-    </Scroll>
+    </Div>
 </Window>

@@ -1,5 +1,7 @@
 <Col>
-    <Label>Welcome to FFSearch.rs!</Label>
-
+    <Label classes="smaller-title">Welcome to FFSearch.rs!</Label>
+            
+    <Space classes="default-space-size" />
+    
     <Label>This is a basic tutorial</Label>
 </Col>
