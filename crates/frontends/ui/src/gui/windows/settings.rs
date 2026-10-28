@@ -1,4 +1,3 @@
-use application::indexer::traits::registry::IndexerId;
 use domain::indexer::config::FileIndexerConfig;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
@@ -10,8 +9,7 @@ use iced_xml::window_wrapper::CssRx;
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use iced_xml::xml_struct::xml_element::XmlElement;
-use log::{info, warn};
-use wait::Waitable;
+use log::info;
 
 use crate::gui::gui_main::{DEFAULT_ENGINE_SETTINGS, text};
 use crate::gui::state::GuiState;
@@ -31,7 +29,7 @@ impl WindowTemplate<Self, GuiState> for SettingsWindow {
             engine: &mut self.engine,
             qb: &mut self.qb,
             #[cfg(debug_assertions)]
-            css_path: "crates/frontends/ui/styles/mainstyle.css",
+            css_path: "styles/mainstyle.css",
             #[cfg(debug_assertions)]
             css_watcher_rx: self.css_rx.as_mut(),
         };
@@ -52,6 +50,7 @@ impl WindowTemplate<Self, GuiState> for SettingsWindow {
         return self;
     }
 
+    #[cfg(debug_assertions)]
     fn set_css_watcher_rx(&mut self, rx: CssRx) {
         self.css_rx = Some(rx);
     }
@@ -66,6 +65,7 @@ impl SettingsWindow {
                 DEFAULT_ENGINE_SETTINGS.clone(),
             )
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
+            #[cfg(debug_assertions)]
             css_rx: None,
         });
     }

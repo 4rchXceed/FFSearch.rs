@@ -2,6 +2,7 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use application::indexer::traits::registry::FileIndexerRegistry;
+use application::searcher::actions::get::DatabaseGet;
 use application::searcher::actions::search::SearchDocument;
 use settings::settings::Settings;
 
@@ -9,6 +10,7 @@ use crate::manager::{RunningTask, Task};
 
 pub struct GuiState {
     pub searcher: SearchDocument,
+    pub get_db: DatabaseGet,
     pub settings: Arc<Mutex<Settings>>,
     pub registry: Arc<dyn FileIndexerRegistry>,
     pub task_sender: Arc<Sender<Task>>,

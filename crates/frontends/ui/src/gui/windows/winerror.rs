@@ -23,7 +23,7 @@ impl WindowTemplate<Self, GuiState> for ErrorWindow {
             engine: &mut self.engine,
             qb: &mut self.qb,
             #[cfg(debug_assertions)]
-            css_path: "crates/frontends/ui/styles/mainstyle.css",
+            css_path: "styles/mainstyle.css",
             #[cfg(debug_assertions)]
             css_watcher_rx: self.css_rx.as_mut(),
         };
@@ -44,6 +44,7 @@ impl WindowTemplate<Self, GuiState> for ErrorWindow {
         return self;
     }
 
+    #[cfg(debug_assertions)]
     fn set_css_watcher_rx(&mut self, rx: CssRx) {
         self.css_rx = Some(rx);
     }
@@ -58,6 +59,7 @@ impl ErrorWindow {
                 DEFAULT_ENGINE_SETTINGS.clone(),
             )
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
+            #[cfg(debug_assertions)]
             css_rx: None,
         });
     }

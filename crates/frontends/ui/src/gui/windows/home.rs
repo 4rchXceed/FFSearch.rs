@@ -1,22 +1,27 @@
-use std::any::Any;
 use std::sync::Arc;
 
+use application::indexer::traits::registry::IndexerId;
 use domain::indexer::config::FileIndexerConfig;
 use domain::searcher::document::Document;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
 use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query_builder::{CustomElementEvent, QueryBuilder};
+#[cfg(debug_assertions)]
 use iced_xml::utils::watch_css::watch_css_file;
 #[cfg(debug_assertions)]
 use iced_xml::window_wrapper::CssRx;
-use iced_xml::window_wrapper::{CssWatcher, Objects, ObjectsReadOnly, WindowTemplate};
+#[cfg(debug_assertions)]
+use iced_xml::window_wrapper::CssWatcher;
+use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
 use iced_xml::xml_engine::XmlEngine;
 use infrastructure::indexer::stdfile::indexer::StdFileIndexerProvider;
 use infrastructure::searcher::tantivy::database::TantivyDatabase;
+use log::info;
 use rfd::FileDialog;
 use wait::Waitable;
 
+#[cfg(debug_assertions)]
 use crate::errors::{AppError, show_error};
 use crate::gui::gui_main::{DEFAULT_ENGINE_SETTINGS, Window};
 use crate::gui::params::WindowParams;
@@ -41,7 +46,7 @@ impl WindowTemplate<Self, GuiState> for HomeWindow {
             engine: &mut self.engine,
             qb: &mut self.qb,
             #[cfg(debug_assertions)]
-            css_path: "crates/frontends/ui/styles/mainstyle.css",
+            css_path: "styles/mainstyle.css",
             #[cfg(debug_assertions)]
             css_watcher_rx: self.css_rx.as_mut(),
         };
@@ -62,6 +67,7 @@ impl WindowTemplate<Self, GuiState> for HomeWindow {
         return self;
     }
 
+    #[cfg(debug_assertions)]
     fn set_css_watcher_rx(&mut self, rx: CssRx) {
         self.css_rx = Some(rx);
     }
@@ -76,6 +82,7 @@ impl HomeWindow {
                 DEFAULT_ENGINE_SETTINGS.clone(),
             )
             .map_err(|e| WindowCreationError::EngineCreationError(e))?,
+            #[cfg(debug_assertions)]
             css_rx: None,
             #[cfg(debug_assertions)]
             css_watcher: None,
@@ -176,8 +183,21 @@ impl HomeWindow {
         self.reload_select(app);
     }
 
-    pub fn finish_search(&mut self, search_result: Vec<Document>) {
-        println!("Search results: {search_result:?}");
+    pub fn finish_search(
+        &mut self,
+        search_result: Vec<Document>,
+        query: String,
+        app: &mut App<GuiState>,
+        indexer: IndexerId,
+    ) {
+        info!("Search results: {search_result:?}");
+
+        self.qb.open_window(
+            Box::new(WindowParams::results(search_result, query, indexer)),
+            app,
+        );
+
+        self.process();
     }
 
     pub fn search(&mut self, app: &mut App<GuiState>) {
@@ -185,10 +205,14 @@ impl HomeWindow {
             if let Some(limit) = self.get_u32("search-limit", "value") {
                 if let Some(query) = self.get_str("search-query", "value") {
                     // We can use wait here, since it doesn't take more than a few ms
-                    let result = app.state.searcher.search(id, query, limit as usize).wait();
+                    let result = app
+                        .state
+                        .searcher
+                        .search(id, query.clone(), limit as usize)
+                        .wait();
 
                     match result {
-                        Ok(res) => self.finish_search(res),
+                        Ok(res) => self.finish_search(res, query, app, id),
                         Err(e) => {
                             self.set_search_status(&format!(
                                 "Error while searching: {}",
@@ -207,7 +231,15 @@ impl HomeWindow {
         }
     }
 
-    pub fn post_create(&mut self, app: &mut App<GuiState>) -> Result<(), WindowCreationError> {
+    pub fn post_create(
+        &mut self,
+        app: &mut App<GuiState>,
+        first_opening: bool,
+    ) -> Result<(), WindowCreationError> {
+        if first_opening {
+            self.qb.open_window(Box::new(WindowParams::startup()), app);
+        }
+
         #[cfg(debug_assertions)]
         match watch_css_file(self, 1000) {
             Err(e) => {

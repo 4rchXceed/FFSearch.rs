@@ -1,8 +1,8 @@
-use std::any::Any;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
 use application::indexer::traits::registry::FileIndexerRegistry;
+use application::searcher::actions::get::DatabaseGet;
 use application::searcher::actions::search::SearchDocument;
 use iced_xml::app_manager::app_manager::WindowManager;
 use iced_xml::app_manager::state_wrapper::App;
@@ -16,22 +16,25 @@ use crate::manager::{RunningTask, Task};
 
 use super::params::{WindowParams, WindowType};
 use super::state::GuiState;
+use super::windows::details::DetailsWindow;
 use super::windows::errors::WindowCreationError;
 use super::windows::home::HomeWindow;
+use super::windows::results::ResultsWindow;
 use super::windows::settings::SettingsWindow;
+use super::windows::startup::StartupWindow;
 use super::windows::tasks::TasksWindow;
 use super::windows::winerror::ErrorWindow;
 
 fn create_window_safe(
     params: WindowParams,
     app: &mut App<GuiState>,
-    _win_id: WindowId,
+    win_id: WindowId,
 ) -> Result<Window, WindowCreationError> {
     let window = match params.wintype {
-        WindowType::HomeWindow => {
-            let mut win = HomeWindow::new(params.startup_errors)?;
+        WindowType::HomeWindow(first_opening, startup_errors) => {
+            let mut win = HomeWindow::new(startup_errors)?;
 
-            win.post_create(app)?;
+            win.post_create(app, first_opening)?;
 
             Window::HomeWindow(win)
         }
@@ -42,13 +45,6 @@ fn create_window_safe(
 
             Window::ErrorWindow(win)
         }
-        WindowType::TasksWindow => {
-            let mut win = TasksWindow::new()?;
-
-            win.post_create(app);
-
-            Window::TasksWindow(win)
-        }
         WindowType::SettingsWindow => {
             let mut win = SettingsWindow::new()?;
 
@@ -56,6 +52,33 @@ fn create_window_safe(
 
             Window::SettingsWindow(win)
         }
+        WindowType::StartupWindow => {
+            let mut win = StartupWindow::new(win_id)?;
+
+            win.post_create();
+
+            Window::StartupWindow(win)
+        }
+        WindowType::ResultsWindow(results, query, indexer_id) => {
+            let mut win = ResultsWindow::new(indexer_id)?;
+
+            win.post_create(results, query);
+
+            Window::ResultsWindow(win)
+        }
+        WindowType::DetailsWindow(path, indexer_id) => {
+            let mut win = DetailsWindow::new()?;
+
+            win.post_create(path, indexer_id, app);
+
+            Window::DetailsWindow(win)
+        } //_ => {
+          //    let mut win = ErrorWindow::new()?;
+
+          //    win.post_create(format!("Window not supported as standalone Window :("));
+
+          //    Window::ErrorWindow(win)
+          //}
     };
 
     return Ok(window);
@@ -83,7 +106,10 @@ window_manager!(Window {
     HomeWindow,
     ErrorWindow,
     TasksWindow,
-    SettingsWindow
+    SettingsWindow,
+    StartupWindow,
+    ResultsWindow,
+    DetailsWindow
 }; GuiState; WindowParams);
 
 impl Window {
@@ -115,15 +141,17 @@ pub fn run_gui(
     sender: Arc<Sender<Task>>,
     tasks: Arc<Mutex<Vec<RunningTask>>>,
     startup_errors: Vec<String>,
+    first_time: bool,
 ) -> AppResult {
     return WindowManager::run_app(
-        WindowParams::home(startup_errors),
+        WindowParams::home(startup_errors, first_time),
         move || GuiState {
             searcher: SearchDocument::new(folders_registry.clone()),
             registry: folders_registry.clone(),
             settings: settings.clone(),
             task_sender: sender.clone(),
             tasks: tasks.clone(),
+            get_db: DatabaseGet::new(folders_registry.clone()),
         },
         DEFAULT_ENGINE_SETTINGS.clone(),
         create_window,

@@ -1,0 +1,11 @@
+<Window>
+    <Label>Search results</Label>
+    <Label id="results-label">Error: script not loaded</Label> <!-- Normally: "For: XYZ" -->
+
+    <!-- TODO: Search input as Component -->
+    <Scroll>
+        <Col id="results">
+            <!-- Example: <Row><Label>path/to/file</Label><Button>Details</Button></Row> -->
+        </Col>
+    </Scroll>
+</Window>

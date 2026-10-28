@@ -1,0 +1,6 @@
+<Window>
+    <Label>FFSearch setup</Label>
+    <Label id="panel">Failed to load the startup window</Label>
+
+    <Button id="next">Next</Button>
+</Window>

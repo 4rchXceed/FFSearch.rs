@@ -1,36 +1,69 @@
+use application::indexer::traits::registry::IndexerId;
+use domain::searcher::document::Document;
+
 #[derive(Clone)]
 pub enum WindowType {
-    HomeWindow,
+    HomeWindow(bool, Vec<String>),
     ErrorWindow(String),
-    TasksWindow,
     SettingsWindow,
+    StartupWindow,
+    ResultsWindow(Vec<Document>, String, IndexerId),
+    DetailsWindow(String, IndexerId),
 }
 
 #[derive(Clone)]
 pub struct WindowParams {
     pub wintype: WindowType,
-    pub startup_errors: Vec<String>,
 }
 
 impl WindowParams {
     pub fn error(error: String) -> Self {
         return Self {
             wintype: WindowType::ErrorWindow(error),
-            startup_errors: Vec::new(),
+            ..Default::default()
         };
     }
 
-    pub fn home(errors: Vec<String>) -> Self {
+    pub fn home(errors: Vec<String>, first_opening: bool) -> Self {
         return Self {
-            wintype: WindowType::HomeWindow,
-            startup_errors: errors,
+            wintype: WindowType::HomeWindow(first_opening, errors),
+            ..Default::default()
         };
     }
 
     pub fn settings() -> Self {
         return Self {
             wintype: WindowType::SettingsWindow,
-            startup_errors: Vec::new(),
+            ..Default::default()
+        };
+    }
+
+    pub fn startup() -> Self {
+        return Self {
+            wintype: WindowType::StartupWindow,
+            ..Default::default()
+        };
+    }
+
+    pub fn results(results: Vec<Document>, query: String, indexer: IndexerId) -> Self {
+        return Self {
+            wintype: WindowType::ResultsWindow(results, query, indexer),
+            ..Default::default()
+        };
+    }
+
+    pub fn details(path: String, indexer: IndexerId) -> Self {
+        return Self {
+            wintype: WindowType::DetailsWindow(path, indexer),
+            ..Default::default()
+        };
+    }
+}
+
+impl Default for WindowParams {
+    fn default() -> Self {
+        return Self {
+            wintype: WindowType::HomeWindow(false, Vec::new()),
         };
     }
 }

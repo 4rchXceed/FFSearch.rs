@@ -1,10 +1,13 @@
+#[cfg(not(windows))]
+use crate::tray_resource;
+#[cfg(not(windows))]
 use std::io::Cursor;
 
 use tray_item::IconSource;
 
-use crate::{systray::errors::IconCreationError, tray_resource};
+use crate::systray::errors::IconCreationError;
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(not(windows))]
 pub fn load_icon_linux() -> Result<IconSource, IconCreationError> {
     let cursor = Cursor::new(tray_resource!(icon.png));
 
@@ -23,7 +26,7 @@ pub fn load_icon_linux() -> Result<IconSource, IconCreationError> {
     return Ok(icon_source);
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub fn load_icon_windows() -> Result<IconSource, IconCreationError> {
     let icon_source = IconSource::Resource("tray-icon");
 

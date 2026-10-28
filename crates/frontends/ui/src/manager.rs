@@ -39,16 +39,20 @@ pub struct AppManager {
     sender: Arc<Sender<Task>>,
     startup_errors: Vec<String>,
     _th: JoinHandle<()>,
+    first_opening: bool,
 }
 
 impl AppManager {
     pub async fn new(config_file: String) -> Result<Self, AppError> {
         let file = Path::new(&config_file);
+        let mut first_opening = false;
 
         if !file.exists() {
             File::create(&config_file).map_err(|e| {
                 AppError::FailedToLoadSettings(format!("Failed to create new config file: {}", e))
             })?;
+
+            first_opening = true;
         }
 
         let settings =
@@ -103,6 +107,7 @@ impl AppManager {
             current_tasks: tasks,
             sender: Arc::new(sender),
             _th: th,
+            first_opening: first_opening,
         });
     }
 
@@ -206,6 +211,7 @@ impl AppManager {
             self.sender.clone(),
             self.current_tasks.clone(),
             self.startup_errors.clone(),
+            self.first_opening,
         ) {
             Ok(_) => {}
             Err(e) => show_error(AppError::OpenUIError(e.to_string())),

@@ -1,0 +1,8 @@
+<Col>
+    <Label>How does this work?</Label>
+
+    <Label>FFSearch works by creating a database of the text inside your files</Label>
+    <Label>It creates a ".ffsearch" folder inside the folder you want to add</Label>
+    <Label>This folder contains the database for the text, so the program doesn't need to search through your files</Label>
+    <Label>To synchronise with the real files, you need to select the folder you want to sync and click the "Update Files" button</Label>
+</Col>

@@ -9,15 +9,12 @@ pub enum AppError {
     TrayIconLoadError(IconCreationError),
     #[error("Failed to build the system tray: {0}. Application cannot start.")]
     FailedToBuildTrayIcon(String),
-    #[error(
-        "Communication with/from system icon tray is closed / has an error, application needs to be closed"
-    )]
-    AppEventFailure(String),
-    #[error("Failed to open the settings")]
+    #[error("Failed to open the settings: {0}")]
     FailedToLoadSettings(String),
-    #[error("Error while opening main window")]
+    #[error("Error while opening main window: {0}")]
     OpenUIError(String),
-    #[error("Lazy error: this errors shouldn't exist / are only for dev")]
+    #[cfg(debug_assertions)]
+    #[error("Lazy error: this errors shouldn't exist / is only for dev: {0}")]
     LazyError(String),
     #[error("Failed to init the logger: {0}")]
     FailedToInitLogger(String),

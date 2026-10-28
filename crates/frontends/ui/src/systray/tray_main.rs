@@ -12,13 +12,13 @@ use super::icon::load_icon_linux;
 
 pub enum MenuAction {
     Exit,
-    AbsoluteVoid, // ✋😐🤚
+    // AbsoluteVoid, // ✋😐🤚
     OpenUI,
 }
 
 pub struct FFSearchTray {
-    tray: TrayItem,
-    sender: Sender<MenuAction>,
+    _tray: TrayItem,
+    _sender: Sender<MenuAction>,
 }
 
 impl FFSearchTray {
@@ -48,11 +48,14 @@ impl FFSearchTray {
         })
         .map_err(|e| AppError::FailedToBuildTrayIcon(e.to_string()))?;
 
-        return Ok(Self { tray, sender });
+        return Ok(Self {
+            _tray: tray,
+            _sender: sender,
+        });
     }
 
-    pub fn exit(&mut self) {
-        // Absolute empty function ✋😐🤚
-        // YOU SHALL NOT CLOSE MY APP
-    }
+    //pub fn exit(&mut self) {
+    // Absolute empty function ✋😐🤚
+    // YOU SHALL NOT CLOSE MY APP
+    //}
 }

@@ -112,4 +112,12 @@ TODO: Recode the system tray, the lib used sucks and doesn't work
 
 TODO: Test on Windows
 
+## Last commit: 48c9d5781a7ae40b81d4691099a2f59a44466421
++ Added:
+    - Results window
+    - Startup window
+    - Document details window
+
++ Bugfixes
++ Gitea Action: https://git.webdash.dev/ArchXceed/FFSearch.rs
 

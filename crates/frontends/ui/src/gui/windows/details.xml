@@ -1,0 +1,9 @@
+<Window>
+    <Label>File details</Label>
+    <Label id="filename">File: Error: could not load script</Label>
+
+    <Scroll>
+        <!-- TODO: Add a highlight for where the searched term is -->
+        <Label id="content">Could not load file content: Unknown Error</Label>
+    </Scroll>
+</Window>

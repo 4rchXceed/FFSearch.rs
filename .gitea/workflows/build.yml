@@ -1,0 +1,37 @@
+on: [push]
+
+# name: FMT & Build
+name: Build & Release
+
+jobs:
+  # fmt:
+  #   name: Rustfmt
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions-rust-lang/setup-rust-toolchain@v1
+  #     - run: rustup component add rustfmt
+  #     - run: cargo fmt --all -- --check
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+            build-warnings: warn
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+      - name: Compile the program
+        run: cargo build -r -p ui
+        env:
+            RUSTFLAGS: -A warnings
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@v4
+        with:
+            name: ui
+            path: target/release/ui

@@ -5,9 +5,8 @@ use windres::Build;
 
 #[cfg(windows)]
 fn main() {
-    Build::new().compile("tray-example.rc").unwrap();
+    Build::new().compile("ffsearch-tray.rc").unwrap();
 }
 
 #[cfg(not(windows))]
-fn main() {
-}
+fn main() {}
