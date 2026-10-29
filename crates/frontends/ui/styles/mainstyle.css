@@ -120,6 +120,14 @@ Button::virtuals {
     font-size: 25;
 }
 
+#updaterm-folder {
+    width: 3fp;
+}
+
+#add-folder {
+    width: 1fp;
+}
+
 .smaller-title {
     font-size: 20;
 }
@@ -166,4 +174,12 @@ Button::virtuals {
 
 #status {
     fg: white;
+}
+
+#daemon-controls > Button {
+    width: max;
+}
+
+#daemon-controls > Center {
+    width: 4fp;
 }

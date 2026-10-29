@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use application::indexer::traits::registry::FileIndexerRegistry;
 use application::searcher::actions::get::DatabaseGet;
 use application::searcher::actions::search::SearchDocument;
+#[cfg(feature = "daemon")]
+use daemon::manager::DaemonManager;
 use indexmap::IndexMap;
 use settings::settings::Settings;
 
@@ -16,4 +18,6 @@ pub struct GuiState {
     pub registry: Arc<dyn FileIndexerRegistry>,
     pub task_sender: Arc<Sender<Task>>,
     pub tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
+    #[cfg(feature = "daemon")]
+    pub daemon_mgr: Arc<Mutex<DaemonManager>>,
 }

@@ -4,6 +4,8 @@ use std::sync::{Arc, Mutex};
 use application::indexer::traits::registry::FileIndexerRegistry;
 use application::searcher::actions::get::DatabaseGet;
 use application::searcher::actions::search::SearchDocument;
+#[cfg(feature = "daemon")]
+use daemon::manager::DaemonManager;
 use iced_xml::app_manager::app_manager::WindowManager;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::app_manager::utils::WindowId;
@@ -160,6 +162,7 @@ pub fn run_gui(
     tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
     startup_errors: Vec<String>,
     first_time: bool,
+    #[cfg(feature = "daemon")] daemon_mgr: Arc<Mutex<DaemonManager>>,
 ) -> AppResult {
     return WindowManager::run_app(
         WindowParams::home(startup_errors, first_time),
@@ -170,6 +173,8 @@ pub fn run_gui(
             task_sender: sender.clone(),
             tasks: tasks.clone(),
             get_db: DatabaseGet::new(folders_registry.clone()),
+            #[cfg(feature = "daemon")]
+            daemon_mgr: daemon_mgr.clone(),
         },
         DEFAULT_ENGINE_SETTINGS.clone(),
         create_window,

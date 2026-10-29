@@ -52,39 +52,63 @@
 
             <Space classes="default-space-size" />
 
-            <Row>
-                <Col classes="quick-setting">
-                    <Label classes="smaller-title">Add a folder</Label>
+            <Col>
+                <Row>
+                    <Col classes="quick-setting" id="add-folder">
+                        <Label classes="smaller-title">Add a folder</Label>
 
-                    <Div classes="hr small-hr">
-                        <Void />
-                    </Div>
+                        <Div classes="hr small-hr">
+                            <Void />
+                        </Div>
 
-                    <Label>Select a folder and add it</Label>
-                    <Button id="add-folder-btn">Select a folder</Button>
-                    <Label id="add-folder-status"></Label>
-                </Col>
+                        <Label>Select a folder and add it</Label>
+                        <Button id="add-folder-btn">Select a folder</Button>
+                        <Label id="add-folder-status"></Label>
+                    </Col>
 
-                <Col classes="quick-setting">
-                    <Label classes="smaller-title">Update / Remove a folder</Label>
+                    <Col classes="quick-setting" id="updaterm-folder">
+                        <Label classes="smaller-title">Update / Remove a folder</Label>
 
-                    <Div classes="hr small-hr">
-                        <Void />
-                    </Div>
+                        <Div classes="hr small-hr">
+                            <Void />
+                        </Div>
 
-                    <Label>Some operations for folders...</Label>
+                        <Label>Some operations for folders...</Label>
 
-                    <Row>
-                        <Select classes="folders-list" id="actions-select"
-                            placeholder="Select a folder"></Select>
-                        <Button id="sync-btn">Update files</Button>
-                        <Button id="delete-btn">Remove</Button>
-                        <Button id="enable-ai-btn">Enable AI</Button>
-                    </Row>
+                        <Col>
+                            <Row>
+                                <Select classes="folders-list" id="actions-select"
+                                    placeholder="Select a folder"></Select>
 
-                    <Label id="actions-status"></Label>
-                </Col>
-            </Row>
+                                <Button id="sync-btn">Update files</Button>
+                                <Button id="delete-btn">Remove</Button>
+                                <Button id="enable-ai-btn">Enable AI</Button>
+                            </Row>
+
+                            <Row id="daemon-controls">
+                                <Center>Watched folders :</Center>
+
+                                <Button id="add-to-daemon">Add</Button>
+                                <Button id="remove-from-daemon">Remove</Button>
+                            </Row>
+                        </Col>
+                        <Label id="actions-status"></Label>
+                    </Col>
+                </Row>
+                <Row>
+                    <Col classes="quick-setting" id="daemon-sync">
+                        <Label classes="smaller-title">Daemon Synchronizer</Label>
+
+                        <Div classes="hr small-hr">
+                            <Void />
+                        </Div>
+
+                        <Label>Start / Stop the daemon</Label>
+                        <Button id="sync-daemon-btn">Start the Daemon</Button>
+                        <Label id="sync-daemon-status"></Label>
+                    </Col>
+                </Row>
+            </Col>
 
             <Space classes="default-space-size" />
 
@@ -107,6 +131,5 @@
                 <Label id="tasks">Tasks loading...</Label>
             </Col>
         </Col>
-
     </Scroll>
 </Div>

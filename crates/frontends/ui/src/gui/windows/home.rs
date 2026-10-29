@@ -30,10 +30,21 @@ use crate::manager::Task;
 
 use super::errors::WindowCreationError;
 
-pub enum SearchType {
+enum DaemonUpdateType {
+    Add,
+    Remove,
+}
+
+enum SearchType {
     Normal,
     #[cfg(feature = "ai")]
     AI,
+}
+
+#[cfg(feature = "daemon")]
+enum DaemonState {
+    Started,
+    Stopped,
 }
 
 pub struct HomeWindow {
@@ -44,6 +55,8 @@ pub struct HomeWindow {
     #[cfg(debug_assertions)]
     css_watcher: Option<CssWatcher>,
     errors: Vec<String>,
+    #[cfg(feature = "daemon")]
+    daemon_state: DaemonState,
 }
 
 impl WindowTemplate<Self, GuiState> for HomeWindow {
@@ -93,6 +106,8 @@ impl HomeWindow {
             #[cfg(debug_assertions)]
             css_watcher: None,
             errors: errors,
+            #[cfg(feature = "daemon")]
+            daemon_state: DaemonState::Stopped,
         });
     }
 
@@ -131,6 +146,14 @@ impl HomeWindow {
     }
 
     pub fn set_actions_status(&mut self, status: &str) {
+        self.qb
+            .b(Dom::get_element_by_id("actions-status").set_property("text", status));
+
+        self.process();
+    }
+
+    #[cfg(feature = "daemon")]
+    pub fn set_daemon_status(&mut self, status: &str) {
         self.qb
             .b(Dom::get_element_by_id("actions-status").set_property("text", status));
 
@@ -208,7 +231,7 @@ impl HomeWindow {
         self.set_search_status("");
     }
 
-    pub fn search(&mut self, app: &mut App<GuiState>, search_type: SearchType) {
+    fn search(&mut self, app: &mut App<GuiState>, search_type: SearchType) {
         if let Some(id) = self.get_u32("folder-select", "value") {
             if let Some(limit) = self.get_u32("search-limit", "value") {
                 if let Some(query) = self.get_str("search-query", "value") {
@@ -262,6 +285,65 @@ impl HomeWindow {
             Ok(res) => self.finish_search(res, query, app, id),
             Err(e) => {
                 self.set_search_status(&format!("Error while searching: {}", e.to_string()));
+            }
+        }
+    }
+
+    fn update_from_daemon(&mut self, app: &mut App<GuiState>, update_type: DaemonUpdateType) {
+        if let Some(id) = self.get_u32("actions-select", "value") {
+            if let Ok(mut daemon_manager) = app.state.daemon_mgr.lock() {
+                if let Some(folder) = app.state.registry.get_folder(id).wait() {
+                    let result = match update_type {
+                        DaemonUpdateType::Add => daemon_manager.add_folder(folder).wait(),
+                        DaemonUpdateType::Remove => daemon_manager.remove_folder(folder).wait(),
+                    };
+
+                    match result {
+                        Ok(_) => {
+                            self.set_actions_status("Daemon modified successfully!");
+                        }
+                        Err(e) => {
+                            self.set_actions_status(&format!("Could not update the daemon: {e}"));
+                        }
+                    }
+                }
+            }
+        } else {
+            self.set_actions_status("Please select a folder first");
+        }
+    }
+
+    #[cfg(feature = "daemon")]
+    pub fn toggle_daemon_state(&mut self, app: &mut App<GuiState>) {
+        if let Ok(mut daemon_mgr) = app.state.daemon_mgr.lock() {
+            match self.daemon_state {
+                DaemonState::Started => {
+                    let result = daemon_mgr.stop_daemon().wait();
+
+                    match result {
+                        Ok(_) => {
+                            self.daemon_state = DaemonState::Stopped;
+
+                            self.qb.b(Dom::get_element_by_id("sync-daemon-btn")
+                                .set_property("text", "Start Daemon"));
+
+                            self.process();
+                        }
+                        Err(_) => {
+                            self.set_daemon_status("Error stopping daemon!");
+                        }
+                    }
+                }
+                DaemonState::Stopped => {
+                    daemon_mgr.start();
+
+                    self.daemon_state = DaemonState::Started;
+
+                    self.qb.b(Dom::get_element_by_id("sync-daemon-btn")
+                        .set_property("text", "Stop Daemon"));
+
+                    self.process();
+                }
             }
         }
     }
@@ -350,6 +432,39 @@ impl HomeWindow {
         #[cfg(not(feature = "ai"))]
         {
             self.qb.b(Dom::get_element_by_id("enable-ai-btn").remove());
+            self.process();
+        }
+
+        #[cfg(not(feature = "daemon"))]
+        {
+            self.qb
+                .b(Dom::get_element_by_id("daemon-controls").remove());
+            self.process();
+        }
+
+        #[cfg(feature = "daemon")]
+        {
+            self.qb
+                .b(Dom::get_element_by_id("add-to-daemon")
+                    .add_event_listener(EventListenerTypes::Click))
+                .with_callback(|this, _, app| {
+                    this.update_from_daemon(app, DaemonUpdateType::Add);
+                });
+
+            self.qb
+                .b(Dom::get_element_by_id("remove-from-daemon")
+                    .add_event_listener(EventListenerTypes::Click))
+                .with_callback(|this, _, app| {
+                    this.update_from_daemon(app, DaemonUpdateType::Remove);
+                });
+
+            self.qb
+                .b(Dom::get_element_by_id("sync-daemon-btn")
+                    .add_event_listener(EventListenerTypes::Click))
+                .with_callback(|this, _, app| {
+                    this.toggle_daemon_state(app);
+                });
+
             self.process();
         }
 

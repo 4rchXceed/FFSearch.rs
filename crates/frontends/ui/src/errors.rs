@@ -20,6 +20,9 @@ pub enum AppError {
     FailedToInitLogger(String),
     #[error("Could not send message between system tray and application: {0}")]
     BroadcastFailed(String),
+    #[cfg(feature = "daemon")]
+    #[error("Could not create the daemon: {0}")]
+    CouldNotCreateDaemon(String),
 }
 
 pub fn show_error(error: AppError) {
