@@ -33,7 +33,7 @@ jobs:
             RUSTFLAGS: -A warnings
       - uses: https://github.com/christopherHX/gitea-upload-artifact@v4
         with:
-            name: ui
+            name: ffsearch-linux-amd64-lite
             path: target/release/ui
       - name: Compile the program (normal version)
         run: cargo build -r -p ui --features daemon
@@ -41,5 +41,5 @@ jobs:
             RUSTFLAGS: -A warnings
       - uses: https://github.com/christopherHX/gitea-upload-artifact@v4
         with:
-            name: ui
+            name: ffsearch-linux-amd64-normal
             path: target/release/ui

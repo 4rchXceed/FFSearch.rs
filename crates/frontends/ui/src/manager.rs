@@ -6,8 +6,11 @@ use std::time::Duration;
 
 use application::indexer::actions::sync::FileIndexerSync;
 use application::indexer::traits::registry::FileIndexerRegistry;
+#[cfg(feature = "daemon")]
 use application::searcher::actions::get::DatabaseGet;
+#[cfg(feature = "daemon")]
 use application::searcher::actions::modification::UpdateDatabase;
+#[cfg(feature = "daemon")]
 use daemon::manager::DaemonManager;
 use domain::indexer::config::FileIndexerConfig;
 use indexmap::IndexMap;
@@ -50,6 +53,7 @@ pub struct AppManager {
     startup_errors: Vec<String>,
     _th: JoinHandle<()>,
     first_opening: bool,
+    #[cfg(feature = "daemon")]
     daemon_mgr: Arc<Mutex<DaemonManager>>,
 }
 
@@ -112,12 +116,15 @@ impl AppManager {
             Self::worker(recv, th_syncer, th_registry, th_tasks, th_settings).await;
         });
 
-        let get = Arc::new(DatabaseGet::new(folders_registry.clone()));
-        let update = Arc::new(UpdateDatabase::new(folders_registry.clone()));
+        #[cfg(feature = "daemon")]
+        let daemon_mgr = {
+            let get = Arc::new(DatabaseGet::new(folders_registry.clone()));
+            let update = Arc::new(UpdateDatabase::new(folders_registry.clone()));
 
-        let daemon_mgr_result = DaemonManager::new(get.clone(), update.clone(), syncer.clone())
-            .map_err(|e| AppError::CouldNotCreateDaemon(e))?;
-        let daemon_mgr = Arc::new(Mutex::new(daemon_mgr_result));
+            let daemon_mgr_result = DaemonManager::new(get, update, syncer.clone())
+                .map_err(|e| AppError::CouldNotCreateDaemon(e))?;
+            Arc::new(Mutex::new(daemon_mgr_result))
+        };
 
         return Ok(Self {
             startup_errors: errors,
@@ -127,6 +134,7 @@ impl AppManager {
             sender: Arc::new(sender),
             _th: th,
             first_opening: first_opening,
+            #[cfg(feature = "daemon")]
             daemon_mgr: daemon_mgr,
         });
     }
@@ -286,6 +294,7 @@ impl AppManager {
             self.current_tasks.clone(),
             self.startup_errors.clone(),
             self.first_opening,
+            #[cfg(feature = "daemon")]
             self.daemon_mgr.clone(),
         ) {
             Ok(_) => {}

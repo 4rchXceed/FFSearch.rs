@@ -12,9 +12,9 @@ pub enum IconCreationError {
         "Invalid tray icon: {0}. Please ask the build provider to rebuild the program with the correct icon format"
     )]
     InvalidIcon(String),
-    #[cfg(not(windows))]
-    #[error(
-        "Could not detect icon format: {0}. Please ask the build provider to rebuild the program with the correct icon format"
-    )]
-    CouldNotDetectIconFormat(String),
+    // #[cfg(not(windows))]
+    // #[error(
+    //     "Could not detect icon format: {0}. Please ask the build provider to rebuild the program with the correct icon format"
+    // )]
+    // CouldNotDetectIconFormat(String),
 }

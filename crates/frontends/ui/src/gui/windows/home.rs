@@ -30,6 +30,7 @@ use crate::manager::Task;
 
 use super::errors::WindowCreationError;
 
+#[cfg(feature = "daemon")]
 enum DaemonUpdateType {
     Add,
     Remove,
@@ -289,6 +290,7 @@ impl HomeWindow {
         }
     }
 
+    #[cfg(feature = "daemon")]
     fn update_from_daemon(&mut self, app: &mut App<GuiState>, update_type: DaemonUpdateType) {
         if let Some(id) = self.get_u32("actions-select", "value") {
             if let Ok(mut daemon_manager) = app.state.daemon_mgr.lock() {

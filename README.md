@@ -1,4 +1,4 @@
-<div style="background-color: white;">
+<div>
     <img style="display: block; margin-left: auto;margin-right: auto;" src="./logo/withText.png" width=370 />
 </div>
 
