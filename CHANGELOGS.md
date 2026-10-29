@@ -126,3 +126,7 @@ TODO: Test on Windows
 
 ## Last commit: 4d11dd9bdb4149028bd27f7a0cc421acb7215fc1
 Fixed BG + AI UI part: a chat window, some buttons and a new background task
+
+## Last commit: 76b4626a619d026933ee9047cbef7f131b33a203
+Added Daemon Manager part: add folders to daemon & start/stop daemon
++ Added Action for "lite version" and "normal version"

@@ -27,8 +27,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libdbus-1-dev pkg-config
-      - name: Compile the program
+      - name: Compile the program (lite version)
         run: cargo build -r -p ui
+        env:
+            RUSTFLAGS: -A warnings
+      - uses: https://github.com/christopherHX/gitea-upload-artifact@v4
+        with:
+            name: ui
+            path: target/release/ui
+      - name: Compile the program (normal version)
+        run: cargo build -r -p ui --features daemon
         env:
             RUSTFLAGS: -A warnings
       - uses: https://github.com/christopherHX/gitea-upload-artifact@v4
