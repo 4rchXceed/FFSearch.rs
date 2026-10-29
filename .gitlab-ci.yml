@@ -5,4 +5,6 @@ rust-latest:
   stage: test
   image: rust:latest
   script:
+    - apt-get update
+    - apt-get install -y protobuf-compiler
     - cargo test --verbose --features daemon_worker,ai,mcp_server

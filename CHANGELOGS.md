@@ -130,3 +130,8 @@ Fixed BG + AI UI part: a chat window, some buttons and a new background task
 ## Last commit: 76b4626a619d026933ee9047cbef7f131b33a203
 Added Daemon Manager part: add folders to daemon & start/stop daemon
 + Added Action for "lite version" and "normal version"
+
+## Last commit: b58dddd14ae239097857c49a78fafbb5d025973c
+Just a small fix to make de Action pipeline work XD
+Errors: https://git.webdash.dev/ArchXceed/FFSearch.rs/actions/runs/26/jobs/58
++ Also fixed Gitlab CI
