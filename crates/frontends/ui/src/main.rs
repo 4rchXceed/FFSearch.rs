@@ -16,10 +16,11 @@ async fn main_safe() -> Result<(), AppError> {
     simple_logger::init_with_level(Level::Info)
         .map_err(|e| AppError::FailedToInitLogger(e.to_string()))?;
 
-    let (sender, recv) = std::sync::mpsc::channel::<MenuAction>();
+    let (tx, mut rx1) = tokio::sync::broadcast::channel::<MenuAction>(100);
+    let mut rx2 = tx.subscribe();
 
     // MacOS support dropped for now: https://github.com/olback/tray-item-rs/ -> * MacOS does not allow running applications in threads other than main, meaning that it is not possible to listen for events in a new thread. See the macos.rs example for a how-to.
-    let _tray = match FFSearchTray::new(sender) {
+    let _tray = match FFSearchTray::new(tx) {
         Ok(t) => t,
         Err(e) => {
             return Err(e);
@@ -36,10 +37,28 @@ async fn main_safe() -> Result<(), AppError> {
 
     let mut manager = AppManager::new(config_path.clone()).await?;
 
+    // Other handlers
+    let _th = tokio::spawn(async move {
+        loop {
+            match rx2.recv().await {
+                Ok(msg) => match msg {
+                    MenuAction::Exit => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                },
+                // Tray is closed
+                Err(_) => {
+                    return;
+                }
+            }
+        }
+    });
+
     manager.open_ui();
 
     loop {
-        match recv.recv() {
+        match rx1.recv().await {
             Ok(msg) => match msg {
                 MenuAction::OpenUI => {
                     manager.open_ui();

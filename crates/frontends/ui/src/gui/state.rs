@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use application::indexer::traits::registry::FileIndexerRegistry;
 use application::searcher::actions::get::DatabaseGet;
 use application::searcher::actions::search::SearchDocument;
+use indexmap::IndexMap;
 use settings::settings::Settings;
 
 use crate::manager::{RunningTask, Task};
@@ -14,5 +15,5 @@ pub struct GuiState {
     pub settings: Arc<Mutex<Settings>>,
     pub registry: Arc<dyn FileIndexerRegistry>,
     pub task_sender: Arc<Sender<Task>>,
-    pub tasks: Arc<Mutex<Vec<RunningTask>>>,
+    pub tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
 }

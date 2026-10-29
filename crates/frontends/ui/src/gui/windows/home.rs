@@ -5,8 +5,8 @@ use domain::indexer::config::FileIndexerConfig;
 use domain::searcher::document::Document;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
-use iced_xml::dom::events::EventListenerTypes;
-use iced_xml::dom::query_builder::{CustomElementEvent, QueryBuilder};
+use iced_xml::dom::query_builder::QueryBuilder;
+use iced_xml::dom::types::{CustomElementEvent, EventListenerTypes};
 #[cfg(debug_assertions)]
 use iced_xml::utils::watch_css::watch_css_file;
 #[cfg(debug_assertions)]
@@ -29,6 +29,12 @@ use crate::gui::state::GuiState;
 use crate::manager::Task;
 
 use super::errors::WindowCreationError;
+
+pub enum SearchType {
+    Normal,
+    #[cfg(feature = "ai")]
+    AI,
+}
 
 pub struct HomeWindow {
     qb: QueryBuilder<Self, GuiState>,
@@ -198,26 +204,21 @@ impl HomeWindow {
         );
 
         self.process();
+
+        self.set_search_status("");
     }
 
-    pub fn search(&mut self, app: &mut App<GuiState>) {
+    pub fn search(&mut self, app: &mut App<GuiState>, search_type: SearchType) {
         if let Some(id) = self.get_u32("folder-select", "value") {
             if let Some(limit) = self.get_u32("search-limit", "value") {
                 if let Some(query) = self.get_str("search-query", "value") {
-                    // We can use wait here, since it doesn't take more than a few ms
-                    let result = app
-                        .state
-                        .searcher
-                        .search(id, query.clone(), limit as usize)
-                        .wait();
-
-                    match result {
-                        Ok(res) => self.finish_search(res, query, app, id),
-                        Err(e) => {
-                            self.set_search_status(&format!(
-                                "Error while searching: {}",
-                                e.to_string()
-                            ));
+                    match search_type {
+                        SearchType::Normal => {
+                            self.normal_search(app, query, limit, id);
+                        }
+                        #[cfg(feature = "ai")]
+                        SearchType::AI => {
+                            self.ai_search(app, query, id);
                         }
                     }
                 } else {
@@ -228,6 +229,40 @@ impl HomeWindow {
             }
         } else {
             self.set_search_status("Please select a folder");
+        }
+    }
+
+    #[cfg(feature = "ai")]
+    fn ai_search(&mut self, app: &mut App<GuiState>, query: String, id: u32) {
+        let agent_result = app.state.registry.get_agent(id).wait();
+
+        if let Some(agent_op) = agent_result
+            && let Some(_) = agent_op
+        {
+            self.qb
+                .open_window(Box::new(WindowParams::ai_chat(query, id)), app);
+
+            self.process();
+
+            self.set_search_status("");
+        } else {
+            self.set_search_status("Please first click 'Enable AI' for this folder");
+        }
+    }
+
+    fn normal_search(&mut self, app: &mut App<GuiState>, query: String, limit: u32, id: u32) {
+        // We can use wait here, since it doesn't take more than a few ms
+        let result = app
+            .state
+            .searcher
+            .search(id, query.clone(), limit as usize)
+            .wait();
+
+        match result {
+            Ok(res) => self.finish_search(res, query, app, id),
+            Err(e) => {
+                self.set_search_status(&format!("Error while searching: {}", e.to_string()));
+            }
         }
     }
 
@@ -254,8 +289,24 @@ impl HomeWindow {
         self.qb
             .b(Dom::get_element_by_id("search-btn").add_event_listener(EventListenerTypes::Click))
             .with_callback(|this, _, app| {
-                this.search(app);
+                this.search(app, SearchType::Normal);
             });
+
+        #[cfg(not(feature = "ai"))]
+        {
+            self.qb.b(Dom::get_element_by_id("prompt-btn").remove());
+            self.process();
+        }
+        #[cfg(feature = "ai")]
+        {
+            self.qb
+                .b(Dom::get_element_by_id("prompt-btn")
+                    .add_event_listener(EventListenerTypes::Click))
+                .with_callback(|this, _, app| {
+                    this.search(app, SearchType::AI);
+                });
+            self.process();
+        }
 
         self.qb
             .b(Dom::get_element_by_id("add-folder-btn")
@@ -278,6 +329,29 @@ impl HomeWindow {
                     this.set_actions_status("Please select a folder first");
                 }
             });
+
+        #[cfg(feature = "ai")]
+        self.qb
+            .b(Dom::get_element_by_id("enable-ai-btn")
+                .add_event_listener(EventListenerTypes::Click))
+            .with_callback(|this, _, app| {
+                if let Some(id) = this.get_u32("actions-select", "value") {
+                    if let Err(e) = app.state.task_sender.send(Task::AssignAI(id)) {
+                        this.set_actions_status(&format!(
+                            "Error while sending task to background process: {}",
+                            e
+                        ));
+                    }
+                } else {
+                    this.set_actions_status("Please select a folder first");
+                }
+            });
+
+        #[cfg(not(feature = "ai"))]
+        {
+            self.qb.b(Dom::get_element_by_id("enable-ai-btn").remove());
+            self.process();
+        }
 
         self.qb
             .b(Dom::get_element_by_id("delete-btn").add_event_listener(EventListenerTypes::Click))

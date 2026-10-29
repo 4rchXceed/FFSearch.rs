@@ -1,24 +1,22 @@
-<Window>
-    <Div id="root">
+<Div id="root">
+    <Col>
         <Col>
-            <Col>
-                <Center>
-                    <Label classes="title">FFSearch setup</Label>
-                </Center>
-                <Center>Tutorial to help you understand the program</Center> <!--
+            <Center>
+                <Label classes="title">FFSearch setup</Label>
+            </Center>
+            <Center>Tutorial to help you understand the program</Center> <!--
                 Normally:
                 "For:
                 XYZ" -->
-            </Col>
-
-            <Space classes="default-space-size" />
-            <Div classes="hr">
-                <Void />
-            </Div>
-            <Space classes="default-space-size" />
-
-            <Label id="panel">Error: failed to load the setup screen</Label>
-            <Button id="next">Next</Button>
         </Col>
-    </Div>
-</Window>
+
+        <Space classes="default-space-size" />
+        <Div classes="hr">
+            <Void />
+        </Div>
+        <Space classes="default-space-size" />
+
+        <Label id="panel">Error: failed to load the setup screen</Label>
+        <Button id="next">Next</Button>
+    </Col>
+</Div>

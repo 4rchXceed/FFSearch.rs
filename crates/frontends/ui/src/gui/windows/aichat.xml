@@ -1,0 +1,26 @@
+<Div id="root">
+    <Col id="airoot">
+        <Col>
+            <Center>
+                <Label classes="title">AI Chat</Label>
+            </Center>
+            <Center id="askabout">Chat about the content of: could not load script</Center>
+        </Col>
+
+        <Space classes="default-space-size" />
+        <Div classes="hr">
+            <Void />
+        </Div>
+        <Space classes="default-space-size" />
+
+        <Scroll id="chatwindow">
+            <Label id="messages">Error: could not load messages</Label>
+        </Scroll>
+
+        <Row id="chat-inputs">
+            <Input placeholder="Ask me something..." id="prompt-input" />
+            <Button id="prompt-btn">Ask</Button>
+        </Row>
+        <Label id="status"></Label>
+    </Col>
+</Div>

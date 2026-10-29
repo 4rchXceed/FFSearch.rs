@@ -1,7 +1,7 @@
 use iced_xml::app_manager::utils::WindowId;
 use iced_xml::dom::api::Dom;
-use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query_builder::QueryBuilder;
+use iced_xml::dom::types::EventListenerTypes;
 #[cfg(debug_assertions)]
 use iced_xml::window_wrapper::CssRx;
 use iced_xml::window_wrapper::{Objects, ObjectsReadOnly, WindowTemplate};
@@ -106,7 +106,8 @@ impl StartupWindow {
             .with_callback(|this, _, app| {
                 match this.current_panel {
                     Panels::Welcome => {
-                        this.qb.b(Dom::get_element_by_id("next").set_property("text", "Finish"));
+                        this.qb
+                            .b(Dom::get_element_by_id("next").set_property("text", "Finish"));
 
                         this.process();
 

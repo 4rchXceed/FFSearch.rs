@@ -1,15 +1,15 @@
-use std::sync::mpsc::Sender;
-
+use tokio::sync::broadcast::Sender;
 use tray_item::TrayItem;
 
 #[cfg(target_os = "windows")]
 use super::icon::load_icon_windows;
 
-use crate::errors::AppError;
+use crate::errors::{AppError, show_error};
 
 #[cfg(not(target_os = "windows"))]
 use super::icon::load_icon_linux;
 
+#[derive(Clone)]
 pub enum MenuAction {
     Exit,
     // AbsoluteVoid, // ✋😐🤚
@@ -37,14 +37,18 @@ impl FFSearchTray {
         let sender_clone = sender.clone();
 
         tray.add_menu_item("Open UI", move || {
-            sender_clone.send(MenuAction::OpenUI).unwrap();
+            match sender_clone.send(MenuAction::OpenUI) {
+                Ok(_) => {}
+                Err(e) => show_error(AppError::BroadcastFailed(e.to_string())),
+            }
         })
         .map_err(|e| AppError::FailedToBuildTrayIcon(e.to_string()))?;
 
         let sender_clone = sender.clone();
 
-        tray.add_menu_item("exit", move || {
-            sender_clone.send(MenuAction::Exit).unwrap();
+        tray.add_menu_item("exit", move || match sender_clone.send(MenuAction::Exit) {
+            Ok(_) => {}
+            Err(e) => show_error(AppError::BroadcastFailed(e.to_string())),
         })
         .map_err(|e| AppError::FailedToBuildTrayIcon(e.to_string()))?;
 

@@ -81,7 +81,7 @@ impl TasksWindow {
             task_list.apply_css("border-width", "2");
             task_list.apply_css("border-color", "white");
 
-            for task in tasks.iter() {
+            for task in tasks.iter().filter_map(|t| t.1.as_ref()) {
                 let mut child = XmlElement::void();
 
                 child.set_tag("Row");

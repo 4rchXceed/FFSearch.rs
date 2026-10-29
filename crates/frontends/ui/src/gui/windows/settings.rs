@@ -1,9 +1,9 @@
 use domain::indexer::config::FileIndexerConfig;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
-use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query::DomQuery;
-use iced_xml::dom::query_builder::{EventResponse, QueryBuilder};
+use iced_xml::dom::query_builder::QueryBuilder;
+use iced_xml::dom::types::{EventListenerTypes, EventResponse};
 #[cfg(debug_assertions)]
 use iced_xml::utils::watch_css::watch_css_file;
 #[cfg(debug_assertions)]
@@ -99,7 +99,6 @@ impl SettingsWindow {
         input.add_data("folder-id", &path);
         input.add_data("for", input_id);
         input.add_class(type_class);
-        println!("{input:?}");
 
         container.append_child(input);
 
@@ -187,6 +186,16 @@ impl SettingsWindow {
         }
 
         return None;
+    }
+
+    #[allow(unused)]
+    pub fn get_value_from_id(&mut self, id: &str) -> Option<String> {
+        self.qb
+            .b(&mut Dom::get_element_by_id(id).get_property("value"));
+
+        let datas = self.process();
+
+        return datas.data_str;
     }
 
     pub fn add_status(&mut self, status: &str) {
@@ -286,6 +295,80 @@ impl SettingsWindow {
             app,
         );
 
+        #[cfg(feature = "ai")]
+        {
+            // ---- AI Settings ----
+            // LLM Provider
+            if let Some(llm_provider) = self.get_value_from_id("llm-provider-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.provider = llm_provider;
+                }
+            }
+
+            // API Key
+            if let Some(api_key) = self.get_value_from_id("api-key-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.api_key = api_key;
+                }
+            }
+
+            // Chat Model
+            if let Some(ai_model) = self.get_value_from_id("ai-model-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.model = ai_model;
+                }
+            }
+
+            // Allow thinking checkbox
+            self.qb
+                .b(Dom::get_element_by_id("thinking-settings").get_property("checked"));
+
+            let result = self.process();
+
+            if let Some(thinking_enabled) = result.data_bool {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.think = thinking_enabled;
+                }
+            }
+
+            // System prompt
+            if let Some(sys_prompt) = self.get_value_from_id("system-prompt-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.preamble = sys_prompt.replace("\n", " ");
+                }
+            }
+
+            // ---- RAG Settings ----
+            // Embedding Model
+            if let Some(embedding_model) = self.get_value_from_id("rag-model-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.ai.rag_config.embedding_model = embedding_model;
+                }
+            }
+
+            // Top results
+            if let Some(top_results_str) = self.get_value_from_id("rag-top-results-settings") {
+                if let Ok(top_results) = top_results_str.parse::<usize>() {
+                    if let Ok(mut settings) = app.state.settings.lock() {
+                        settings.ai.rag_config.top_results = top_results;
+                    }
+                } else {
+                    self.add_status(&format!("Not a number (top results = '{top_results_str}')"));
+                }
+            }
+
+            // Max batch size
+            if let Some(batch_size_str) = self.get_value_from_id("batch-size-settings") {
+                if let Ok(batch_size) = batch_size_str.parse::<usize>() {
+                    if let Ok(mut settings) = app.state.settings.lock() {
+                        settings.ai.rag_config.max_batch_size = batch_size;
+                    }
+                } else {
+                    self.add_status(&format!("Not a number (batch size = '{batch_size_str}')"));
+                }
+            }
+        }
+
         if let Ok(settings) = app.state.settings.lock() {
             if let Err(e) = settings.save() {
                 self.add_status(&format!("Failed to save settings: {e}"));
@@ -298,6 +381,14 @@ impl SettingsWindow {
         }
     }
 
+    #[allow(unused)]
+    pub fn set_val(&mut self, id: &str, val: String) {
+        self.qb
+            .b(Dom::get_element_by_id(id).set_property("value", &val));
+
+        self.process();
+    }
+
     pub fn post_create(&mut self, app: &mut App<GuiState>) {
         let mut main = XmlElement::void();
         main.set_tag("Col");
@@ -308,6 +399,40 @@ impl SettingsWindow {
                     path.clone(),
                     indexer_cfg.clone(),
                 ));
+            }
+
+            #[cfg(feature = "ai")]
+            {
+                self.set_val("llm-provider-settings", settings.ai.provider.clone());
+                self.set_val("api-key-settings", settings.ai.api_key.clone());
+                self.set_val("ai-model-settings", settings.ai.model.clone());
+                self.set_val(
+                    "thinking-settings",
+                    if settings.ai.think {
+                        String::from("true")
+                    } else {
+                        String::from("false")
+                    },
+                );
+                self.set_val("system-prompt-settings", settings.ai.preamble.clone());
+                self.set_val(
+                    "rag-model-settings",
+                    settings.ai.rag_config.embedding_model.clone(),
+                );
+                self.set_val(
+                    "rag-top-results-settings",
+                    settings.ai.rag_config.top_results.to_string(),
+                );
+                self.set_val(
+                    "batch-size-settings",
+                    settings.ai.rag_config.max_batch_size.to_string(),
+                );
+            }
+
+            #[cfg(not(feature = "ai"))]
+            {
+                self.qb.b(Dom::get_element_by_id("ai-settings").remove());
+                self.process();
             }
         }
 

@@ -18,6 +18,8 @@ pub enum AppError {
     LazyError(String),
     #[error("Failed to init the logger: {0}")]
     FailedToInitLogger(String),
+    #[error("Could not send message between system tray and application: {0}")]
+    BroadcastFailed(String),
 }
 
 pub fn show_error(error: AppError) {

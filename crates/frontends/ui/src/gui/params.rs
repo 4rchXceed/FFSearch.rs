@@ -9,6 +9,8 @@ pub enum WindowType {
     StartupWindow,
     ResultsWindow(Vec<Document>, String, IndexerId),
     DetailsWindow(String, IndexerId),
+    #[cfg(feature = "ai")]
+    AiChatWindow(String, IndexerId),
 }
 
 #[derive(Clone)]
@@ -55,6 +57,14 @@ impl WindowParams {
     pub fn details(path: String, indexer: IndexerId) -> Self {
         return Self {
             wintype: WindowType::DetailsWindow(path, indexer),
+            ..Default::default()
+        };
+    }
+
+    #[cfg(feature = "ai")]
+    pub fn ai_chat(prompt: String, indexer: IndexerId) -> Self {
+        return Self {
+            wintype: WindowType::AiChatWindow(prompt, indexer),
             ..Default::default()
         };
     }

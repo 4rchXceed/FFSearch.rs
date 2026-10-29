@@ -7,6 +7,9 @@ use std::time::Duration;
 use application::indexer::actions::sync::FileIndexerSync;
 use application::indexer::traits::registry::FileIndexerRegistry;
 use domain::indexer::config::FileIndexerConfig;
+use indexmap::IndexMap;
+#[cfg(feature = "ai")]
+use infrastructure::ai::rig::agent::RigAgent;
 use infrastructure::indexer::stdfile::indexer::StdFileIndexerProvider;
 use infrastructure::indexer::stdfile::registry::InMemoryRegistry;
 use infrastructure::indexer::xberg::extractor::XbergFileExtractor;
@@ -20,6 +23,8 @@ use crate::gui::gui_main::run_gui;
 
 pub enum Task {
     SyncFolder(u32),
+    #[cfg(feature = "ai")]
+    AssignAI(u32),
 }
 
 pub struct TaskResult {
@@ -27,15 +32,17 @@ pub struct TaskResult {
     pub error: Option<String>,
 }
 
-pub struct RunningTask {
+pub struct RunningTaskData {
     pub name: String,
     pub result: Option<TaskResult>,
 }
 
+pub type RunningTask = Option<RunningTaskData>;
+
 pub struct AppManager {
     settings: Arc<Mutex<Settings>>,
     folders_registry: Arc<dyn FileIndexerRegistry>,
-    current_tasks: Arc<Mutex<Vec<RunningTask>>>,
+    current_tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
     sender: Arc<Sender<Task>>,
     startup_errors: Vec<String>,
     _th: JoinHandle<()>,
@@ -89,16 +96,16 @@ impl AppManager {
 
         let (sender, recv) = std::sync::mpsc::channel();
 
-        let tasks = Arc::new(Mutex::new(Vec::new()));
+        let settings = Arc::new(Mutex::new(settings));
+        let tasks = Arc::new(Mutex::new(IndexMap::new()));
 
         let th_registry = folders_registry.clone();
         let th_tasks = tasks.clone();
 
+        let th_settings = settings.clone();
         let th = tokio::spawn(async move {
-            Self::worker(recv, syncer, th_registry, th_tasks).await;
+            Self::worker(recv, syncer, th_registry, th_tasks, th_settings).await;
         });
-
-        let settings = Arc::new(Mutex::new(settings));
 
         return Ok(Self {
             startup_errors: errors,
@@ -111,11 +118,13 @@ impl AppManager {
         });
     }
 
+    #[allow(unused)]
     pub async fn worker(
         rx: Receiver<Task>,
         syncer: Arc<FileIndexerSync>,
         registry: Arc<dyn FileIndexerRegistry>,
-        current_tasks: Arc<Mutex<Vec<RunningTask>>>,
+        current_tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
+        settings: Arc<Mutex<Settings>>,
     ) {
         let mut pool = Vec::new();
 
@@ -152,13 +161,59 @@ impl AppManager {
 
                         tokio::task::yield_now().await;
                     }
+                    #[cfg(feature = "ai")]
+                    Task::AssignAI(folder) => {
+                        let folder_path = registry
+                            .get_folder(folder)
+                            .await
+                            .unwrap_or(String::from("Unknown"));
+
+                        let settings_clone = settings.clone();
+                        let registry_clone = registry.clone();
+
+                        let th = Self::run_task(
+                            current_tasks.clone(),
+                            format!("Creating agent and building RAG for: {folder_path}"),
+                            async move {
+                                let config = if let Ok(s) = settings_clone.lock() {
+                                    s.ai.clone()
+                                } else {
+                                    return Err(format!("Could not get AI settings"));
+                                };
+
+                                let db = registry_clone
+                                    .get_database(folder)
+                                    .await
+                                    .ok_or(format!("Could not get database"))?;
+
+                                let ai_provider = RigAgent::new_auto_provider(config, db)
+                                    .await
+                                    .map_err(|e| format!("Failed to create the AI Agent: {e}"))?;
+
+                                let agent = Arc::new(ai_provider);
+
+                                registry_clone
+                                    .assign_agent(folder, agent)
+                                    .await
+                                    .map_err(|_| {
+                                        String::from("Failed to add the agent to the indexer :(")
+                                    })?;
+
+                                return Ok(());
+                            },
+                        );
+
+                        pool.push(th);
+
+                        tokio::task::yield_now().await;
+                    }
                 }
             }
         }
     }
 
     pub fn run_task<F>(
-        current_tasks: Arc<Mutex<Vec<RunningTask>>>,
+        current_tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
         name: String,
         fun: F,
     ) -> Option<JoinHandle<()>>
@@ -169,11 +224,15 @@ impl AppManager {
             let tasks_res = current_tasks.lock();
 
             if let Ok(mut tasks) = tasks_res {
-                tasks.push(RunningTask {
-                    name: name.to_string(),
-                    result: None,
-                });
-                tasks.len() - 1 // Return the last index
+                let len = tasks.len();
+                tasks.insert(
+                    len as u32,
+                    Some(RunningTaskData {
+                        name: name.to_string(),
+                        result: None,
+                    }),
+                );
+                len // Return the last index
             } else {
                 return None;
             }
@@ -182,21 +241,23 @@ impl AppManager {
         let handle = tokio::spawn(async move {
             let result = fun.await;
             if let Ok(mut tasks) = current_tasks.lock() {
-                if let Some(task) = tasks.get_mut(id) {
-                    task.result = Some(TaskResult {
-                        success: result.is_ok(),
-                        error: result.err(),
-                    });
+                if let Some(task) = tasks.get_mut(&(id as u32)) {
+                    if let Some(task_data) = task {
+                        task_data.result = Some(TaskResult {
+                            success: result.is_ok(),
+                            error: result.err(),
+                        });
+                    }
                 } else {
                     error!("Could not find the task {id}??");
                 }
             }
 
-            tokio::time::sleep(Duration::from_secs(4)).await;
+            tokio::time::sleep(Duration::from_secs(10)).await;
 
             if let Ok(mut tasks) = current_tasks.lock() {
                 if id < tasks.len() {
-                    tasks.remove(id);
+                    tasks.insert(id as u32, None);
                 }
             }
         });

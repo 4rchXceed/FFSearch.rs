@@ -1,5 +1,6 @@
-<Window>
-    <Row id="tasks-list">
-        <Row><Label classes="row-status">❌</Label><Label>Error: script not loaded</Label></Row>
+<Row id="tasks-list">
+    <Row>
+        <Label classes="row-status">❌</Label>
+        <Label>Error: script not loaded</Label>
     </Row>
-</Window>
+</Row>

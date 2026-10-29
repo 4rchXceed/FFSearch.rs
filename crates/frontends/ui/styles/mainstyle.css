@@ -1,3 +1,8 @@
+/* * {
+    border-width: 1;
+    border-color: red;
+} */
+
 Div,
 Col,
 Window {
@@ -6,6 +11,7 @@ Window {
 
 Label {
     fg: white;
+    enable: true;
 }
 
 Window {
@@ -19,8 +25,8 @@ Window {
 }
 
 Label,
-Center {
-    fg: rgb(255, 255, 255);
+Center::virtuals {
+    fg: white;
 }
 
 Center {
@@ -28,9 +34,15 @@ Center {
     center: x;
 }
 
+Center::virtuals {
+    width: max;
+    center: all;
+}
+
 Button,
 Input,
-Select {
+Select,
+Textarea {
     border-width: 2;
     border-color: rgb(143, 143, 143);
     border-radius: 5;
@@ -39,8 +51,17 @@ Select {
     bg: white;
 }
 
+Checkbox {
+    bg: white;
+    border-width: 2;
+    border-radius: 5;
+    border-color: black;
+    checkbox-icon: "X" 20 relative 5;
+}
+
 Input,
-Select {
+Select,
+Textarea {
     width: max;
     selection-color: rgb(200, 200, 200);
 }
@@ -127,4 +148,22 @@ Button::virtuals {
 .box-border-white {
     border-width: 2;
     border-color: white;
+}
+
+.subtitle {
+    fg: white;
+}
+
+#chatwindow {
+    border-width: 2;
+    border-color: white;
+    height: max;
+}
+
+#airoot {
+    height: max;
+}
+
+#status {
+    fg: white;
 }

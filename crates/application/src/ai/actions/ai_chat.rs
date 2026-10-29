@@ -5,6 +5,7 @@ use tokio::sync::{RwLock, mpsc::Sender};
 
 use crate::indexer::traits::registry::{FileIndexerRegistry, IndexerId};
 
+#[derive(Clone)]
 pub struct AiChat {
     messages: Arc<RwLock<Vec<AIMessage>>>,
     registry: Arc<dyn FileIndexerRegistry>,
@@ -31,13 +32,21 @@ impl AiChat {
             .ok_or(String::from("File indexer not found / delete"))?
             .ok_or(String::from("No agent created for this folder"))?;
 
+        {
+            self.messages
+                .write()
+                .await
+                .push(AIMessage::user(query.clone()));
+        }
+
         let (message, response) = {
-            ai.ask(query, msg_sender, self.messages.read().await.clone())
-                .await?
+            let messages = { self.messages.read().await.clone() };
+            ai.ask(query, msg_sender, messages).await?
         };
 
-        self.messages.write().await.push(message.clone());
-        self.messages.write().await.push(response.clone());
+        {
+            self.messages.write().await.push(response.clone());
+        }
 
         return Ok(message);
     }

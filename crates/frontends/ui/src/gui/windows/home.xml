@@ -1,110 +1,112 @@
-<Window>
+<Div id="root">
+
     <Scroll>
-        <Div id="root">
+        <Col>
+            <Float>
+                <Button id="open-settings">Settings</Button>
+            </Float>
+
             <Col>
-                <Float>
-                    <Button id="open-settings">Settings</Button>
-                </Float>
-
-                <Col>
-                    <Center>
-                        <Label classes="title">FFSearch.rs</Label>
-                    </Center>
-                    <Center classes="subtitle">Search your files without waiting for a decade</Center>
-                </Col>
-
-                <Space classes="default-space-size" />
-                <Div classes="hr">
-                    <Void />
-                </Div>
-                <Space classes="default-space-size" />
-
-                <Col classes="white-border">
-                    <Row classes="width-max">
-                        <Space />
-                        <Input id="search-query" placeholder="Search something..."></Input>
-                        <Space />
-                    </Row>
-
-                    <Space id="search-input-space" />
-
-                    <Row id="search-filters-cont">
-                        <Space />
-                        <Select id="folder-select" classes="folders-list"
-                            placeholder="And select a folder"></Select>
-                        <Input id="search-limit" placeholder="Max number of documents">100</Input>
-                        <Button id="search-btn">Search</Button>
-                        <Space />
-                    </Row>
-                    <Label id="search-status"></Label>
-                </Col>
-
-                <Space classes="default-space-size" />
                 <Center>
-                    <Label classes="quick-settings">Quick settings</Label>
+                    <Label classes="title">FFSearch.rs</Label>
                 </Center>
-                <Space classes="default-space-size" />
+                <Center classes="subtitle">Search your files without waiting for a decade</Center>
+            </Col>
 
-                <Div classes="hr">
-                    <Void />
-                </Div>
+            <Space classes="default-space-size" />
+            <Div classes="hr">
+                <Void />
+            </Div>
+            <Space classes="default-space-size" />
 
-                <Space classes="default-space-size" />
-
-                <Row>
-                    <Col classes="quick-setting">
-                        <Label classes="smaller-title">Add a folder</Label>
-
-                        <Div classes="hr small-hr">
-                            <Void />
-                        </Div>
-
-                        <Label>Select a folder and add it</Label>
-                        <Button id="add-folder-btn">Select a folder</Button>
-                        <Label id="add-folder-status"></Label>
-                    </Col>
-
-                    <Col classes="quick-setting">
-                        <Label classes="smaller-title">Update / Remove a folder</Label>
-
-                        <Div classes="hr small-hr">
-                            <Void />
-                        </Div>
-
-                        <Label>Some operations for folders...</Label>
-
-                        <Row>
-                            <Select classes="folders-list" id="actions-select"
-                                placeholder="Select a folder"></Select>
-                            <Button id="sync-btn">Update files</Button>
-                            <Button id="delete-btn">Remove</Button>
-                        </Row>
-
-                        <Label id="actions-status"></Label>
-                    </Col>
+            <Col classes="white-border">
+                <Row classes="width-max">
+                    <Space />
+                    <Input id="search-query" placeholder="Search something..."></Input>
+                    <Space />
                 </Row>
 
-                <Space classes="default-space-size" />
+                <Space id="search-input-space" />
 
-                <Div classes="hr">
-                    <Void />
-                </Div>
-
-                <Space classes="default-space-size" />
-
-                <Label id="startup-errors"></Label>
-
-                <Space classes="default-space-size" />
-                <Div classes="hr">
-                    <Void />
-                </Div>
-
-                <Space classes="default-space-size" />
-
-                <Col>
-                    <Label id="tasks">Tasks loading...</Label>
-                </Col>
+                <Row id="search-filters-cont">
+                    <Space />
+                    <Select id="folder-select" classes="folders-list"
+                        placeholder="And select a folder"></Select>
+                    <Input id="search-limit" placeholder="Max number of documents">100</Input>
+                    <Button id="search-btn">Search</Button>
+                    <Button id="prompt-btn">Prompt AI</Button>
+                    <Space />
+                </Row>
+                <Label id="search-status"></Label>
             </Col>
-        </Div>
+
+            <Space classes="default-space-size" />
+            <Center>
+                <Label classes="quick-settings">Quick settings</Label>
+            </Center>
+            <Space classes="default-space-size" />
+
+            <Div classes="hr">
+                <Void />
+            </Div>
+
+            <Space classes="default-space-size" />
+
+            <Row>
+                <Col classes="quick-setting">
+                    <Label classes="smaller-title">Add a folder</Label>
+
+                    <Div classes="hr small-hr">
+                        <Void />
+                    </Div>
+
+                    <Label>Select a folder and add it</Label>
+                    <Button id="add-folder-btn">Select a folder</Button>
+                    <Label id="add-folder-status"></Label>
+                </Col>
+
+                <Col classes="quick-setting">
+                    <Label classes="smaller-title">Update / Remove a folder</Label>
+
+                    <Div classes="hr small-hr">
+                        <Void />
+                    </Div>
+
+                    <Label>Some operations for folders...</Label>
+
+                    <Row>
+                        <Select classes="folders-list" id="actions-select"
+                            placeholder="Select a folder"></Select>
+                        <Button id="sync-btn">Update files</Button>
+                        <Button id="delete-btn">Remove</Button>
+                        <Button id="enable-ai-btn">Enable AI</Button>
+                    </Row>
+
+                    <Label id="actions-status"></Label>
+                </Col>
+            </Row>
+
+            <Space classes="default-space-size" />
+
+            <Div classes="hr">
+                <Void />
+            </Div>
+
+            <Space classes="default-space-size" />
+
+            <Label id="startup-errors"></Label>
+
+            <Space classes="default-space-size" />
+            <Div classes="hr">
+                <Void />
+            </Div>
+
+            <Space classes="default-space-size" />
+
+            <Col>
+                <Label id="tasks">Tasks loading...</Label>
+            </Col>
+        </Col>
+
     </Scroll>
-</Window>
+</Div>

@@ -10,8 +10,11 @@ use iced_xml::app_manager::utils::WindowId;
 use iced_xml::window_manager;
 use iced_xml::window_wrapper::AppResult;
 use iced_xml::xml_struct::xml_element::XmlElement;
+use indexmap::IndexMap;
 use settings::settings::Settings;
 
+#[cfg(feature = "ai")]
+use crate::gui::windows::aichat::AiChatWindow;
 use crate::manager::{RunningTask, Task};
 
 use super::params::{WindowParams, WindowType};
@@ -72,13 +75,24 @@ fn create_window_safe(
             win.post_create(path, indexer_id, app);
 
             Window::DetailsWindow(win)
-        } //_ => {
-          //    let mut win = ErrorWindow::new()?;
+        }
+        #[cfg(feature = "ai")]
+        WindowType::AiChatWindow(prompt, indexer_id) => {
+            let mut win = AiChatWindow::new(indexer_id, app)?;
 
-          //    win.post_create(format!("Window not supported as standalone Window :("));
+            win.post_create(prompt, app);
 
-          //    Window::ErrorWindow(win)
-          //}
+            Window::AiChatWindow(win)
+        }
+        #[cfg(not(feature = "ai"))]
+        #[allow(unused)]
+        _ => {
+            let mut win = ErrorWindow::new()?;
+
+            win.post_create(format!("Window not supported as standalone Window :("));
+
+            Window::ErrorWindow(win)
+        }
     };
 
     return Ok(window);
@@ -102,6 +116,9 @@ fn create_window(params: WindowParams, state: &mut App<GuiState>, win_id: Window
     }
 }
 
+#[cfg(not(feature = "ai"))]
+type AiChatWindow = ErrorWindow;
+
 window_manager!(Window {
     HomeWindow,
     ErrorWindow,
@@ -109,7 +126,8 @@ window_manager!(Window {
     SettingsWindow,
     StartupWindow,
     ResultsWindow,
-    DetailsWindow
+    DetailsWindow,
+    AiChatWindow
 }; GuiState; WindowParams);
 
 impl Window {
@@ -139,7 +157,7 @@ pub fn run_gui(
     folders_registry: Arc<dyn FileIndexerRegistry>,
     settings: Arc<Mutex<Settings>>,
     sender: Arc<Sender<Task>>,
-    tasks: Arc<Mutex<Vec<RunningTask>>>,
+    tasks: Arc<Mutex<IndexMap<u32, RunningTask>>>,
     startup_errors: Vec<String>,
     first_time: bool,
 ) -> AppResult {

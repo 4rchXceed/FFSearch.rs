@@ -252,6 +252,7 @@ impl AiProvider for RigAgent {
                     final_message.push_str(chunk.as_str());
 
                     if let Err(_) = sender.send(chunk).await {
+                        // println!("{e}");
                         break; // RX disconnected, we stop else we'll send these messages in the VOID
                     }
                 }

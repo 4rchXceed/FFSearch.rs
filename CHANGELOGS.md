@@ -124,3 +124,5 @@ TODO: Test on Windows
 ## Last commit: 1f42e12a9eba9037bed4fd80519e14ce8d53e8e3
 + Made the CSS / Styling for every window
 
+## Last commit: 4d11dd9bdb4149028bd27f7a0cc421acb7215fc1
+Fixed BG + AI UI part: a chat window, some buttons and a new background task

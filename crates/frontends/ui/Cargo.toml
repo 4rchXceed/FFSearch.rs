@@ -16,6 +16,7 @@ log = "0.4.34"
 wait = "0.2.6"
 rfd = "0.17.2"
 chrono = "0.4.45"
+indexmap = "2.14.2"
 tokio = { version = "1.53.1", features = ["full"] }
 iced-xml = { git = "https://github.com/4rchXceed/iced-xml", branch = "code-rewrite" }
 #iced-xml = { path = "../../../../../../Corbeille/iced-xml/" }
@@ -26,10 +27,14 @@ application = { path = "../../application" }
 infrastructure = { path = "../../infrastructure" }
 domain = { path = "../../domain" }
 
+# Features
+mcp = { path = "../../frontends/mcp", optional = true }
+daemon = { path = "../../frontends/daemon", optional = true }
+
 [features]
-ai=[]
-mcp_server=[]
-daemon_worker=[]
+ai=["infrastructure/ai", "settings/ai"]
+mcp_server=["mcp", "settings/mcp_server"]
+daemon_worker=["daemon", "settings/daemon_worker"]
 dev = ["iced-xml/css-watcher"]
 
 [target.'cfg(windows)'.dependencies]

@@ -2,8 +2,8 @@ use application::indexer::traits::registry::IndexerId;
 use chrono::DateTime;
 use domain::searcher::document::Document;
 use iced_xml::dom::api::Dom;
-use iced_xml::dom::events::EventListenerTypes;
 use iced_xml::dom::query_builder::QueryBuilder;
+use iced_xml::dom::types::EventListenerTypes;
 #[cfg(debug_assertions)]
 use iced_xml::utils::watch_css::watch_css_file;
 #[cfg(debug_assertions)]
