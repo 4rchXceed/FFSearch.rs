@@ -19,6 +19,17 @@
                 <Col id="folders-settings"></Col>
             </Scroll>
 
+            <Col classes="single-settings" id="mcp-settings">
+                <Label classes="set-sub">MCP Settings</Label>
+                <Col classes="subsettings">
+                    <Label classes="subset-sub">MCP</Label>
+                    <Row>
+                        <Label classes="set-label">Listen address</Label>
+                        <Input classes="input" id="mcp-listen-addr-settings" placeholder="Example: localhost:8080"></Input>
+                    </Row>
+                </Col>
+            </Col>
+
             <Col classes="single-settings" id="ai-settings">
                 <Label>AI Settings</Label>
                 <Col classes="subsettings">

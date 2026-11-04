@@ -32,6 +32,8 @@ pub struct TantivyDatabase {
     index: Arc<Index>,
     /// The path fields:
     path_field: Field,
+    /// Indexable path field:
+    path_text_field: Field,
     /// The content field
     content_field: Field,
     /// The unique ID field
@@ -81,6 +83,9 @@ impl TantivyDatabase {
         let path_field = schema
             .get_field("path")
             .map_err(|_| TantivyDatabaseError::ShouldNotHappenError)?;
+        let path_text_field = schema
+            .get_field("path_text")
+            .map_err(|_| TantivyDatabaseError::ShouldNotHappenError)?;
         let content_field = schema
             .get_field("content")
             .map_err(|_| TantivyDatabaseError::ShouldNotHappenError)?;
@@ -102,6 +107,7 @@ impl TantivyDatabase {
             uuid_field: uuid_field,
             mod_date_field: mod_date_field,
             index_path: index_path_str,
+            path_text_field,
         });
     }
 
@@ -118,6 +124,7 @@ impl TantivyDatabase {
             .set_precision(DateTimePrecision::Seconds);
 
         schema_builder.add_text_field("path", STRING | STORED);
+        schema_builder.add_text_field("path_text", TEXT | STORED);
         schema_builder.add_text_field("content", TEXT | STORED);
         schema_builder.add_text_field("uuid", STRING | STORED);
         schema_builder.add_date_field("moddate", date_options);
@@ -135,7 +142,8 @@ impl TantivyDatabase {
     ) -> Result<String, TantivyDatabaseError> {
         let mut doc = TantivyDocument::default();
 
-        doc.add_text(self.path_field, path);
+        doc.add_text(self.path_field, path.clone());
+        doc.add_text(self.path_text_field, path);
         doc.add_text(self.content_field, content);
         doc.add_text(self.uuid_field, uuid.clone());
         doc.add_date(self.mod_date_field, DateTime::from_timestamp_secs(mod_date));
@@ -226,8 +234,10 @@ impl DatabaseProvider for TantivyDatabase {
             .map_err(|e| DatabaseError::Database(e.to_string()))?;
 
         let searcher = reader.searcher();
-        let query_parser =
-            QueryParser::for_index(&self.index, vec![self.path_field, self.content_field]);
+        let mut query_parser =
+            QueryParser::for_index(&self.index, vec![self.path_text_field, self.content_field]);
+
+        query_parser.set_field_boost(self.path_text_field, 2.0);
 
         let query = query_parser
             .parse_query(&search_query.query.as_str())

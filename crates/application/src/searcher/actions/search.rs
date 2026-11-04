@@ -7,6 +7,7 @@ use crate::{
     searcher::error::DatabaseError,
 };
 
+#[derive(Clone)]
 pub struct SearchDocument {
     registry: Arc<dyn FileIndexerRegistry>,
 }

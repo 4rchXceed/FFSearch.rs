@@ -295,6 +295,17 @@ impl SettingsWindow {
             app,
         );
 
+        #[cfg(feature = "mcp")]
+        {
+            // ---- MCP Settings ----
+            // Listen addr
+            if let Some(listen_addr) = self.get_value_from_id("mcp-listen-addr-settings") {
+                if let Ok(mut settings) = app.state.settings.lock() {
+                    settings.mcp.listen_addr = listen_addr;
+                }
+            }
+        }
+
         #[cfg(feature = "ai")]
         {
             // ---- AI Settings ----
@@ -433,6 +444,18 @@ impl SettingsWindow {
             {
                 self.qb.b(Dom::get_element_by_id("ai-settings").remove());
                 self.process();
+            }
+
+            #[cfg(not(feature = "mcp"))]
+            {
+                self.qb.b(Dom::get_element_by_id("mcp-settings").remove());
+
+                self.process();
+            }
+
+            #[cfg(feature = "mcp")]
+            {
+                self.set_val("mcp-listen-addr-settings", settings.mcp.listen_addr.clone());
             }
         }
 

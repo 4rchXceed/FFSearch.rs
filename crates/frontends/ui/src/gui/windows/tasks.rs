@@ -91,7 +91,7 @@ impl TasksWindow {
                 status_label.set_tag("Label");
                 status_label.add_class("row-status");
                 status_label.set_text(if let Some(result) = &task.result {
-                    if result.success { "✅" } else { "❌" }
+                    if result.success { "✅" } else { "ℹ️" }
                 } else {
                     "⏳"
                 });

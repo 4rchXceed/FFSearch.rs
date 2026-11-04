@@ -8,8 +8,13 @@ use application::indexer::actions::sync::FileIndexerSync;
 use application::indexer::traits::registry::FileIndexerRegistry;
 #[cfg(feature = "daemon")]
 use application::searcher::actions::get::DatabaseGet;
+#[cfg(not(feature = "daemon"))]
+#[cfg(feature = "mcp")]
+use application::searcher::actions::get::DatabaseGet;
 #[cfg(feature = "daemon")]
 use application::searcher::actions::modification::UpdateDatabase;
+#[cfg(feature = "mcp")]
+use application::searcher::actions::search::SearchDocument;
 #[cfg(feature = "daemon")]
 use daemon::manager::DaemonManager;
 use domain::indexer::config::FileIndexerConfig;
@@ -31,6 +36,8 @@ pub enum Task {
     SyncFolder(u32),
     #[cfg(feature = "ai")]
     AssignAI(u32),
+    #[cfg(feature = "mcp")]
+    StartMCP,
 }
 
 pub struct TaskResult {
@@ -174,6 +181,36 @@ impl AppManager {
                                         errors.len()
                                     ));
                                 }
+                                return Ok(());
+                            },
+                        );
+
+                        pool.push(th);
+
+                        tokio::task::yield_now().await;
+                    }
+                    #[cfg(feature = "mcp")]
+                    Task::StartMCP => {
+                        let db_get = Arc::new(DatabaseGet::new(registry.clone()));
+                        let db_search = Arc::new(SearchDocument::new(registry.clone()));
+                        let settings_clone = settings.clone();
+
+                        let th = Self::run_task(
+                            current_tasks.clone(),
+                            String::from("MCP server running"),
+                            async move {
+                                use mcp::server::McpServer;
+
+                                let config = if let Ok(s) = settings_clone.lock() {
+                                    s.mcp.clone()
+                                } else {
+                                    return Err(String::from("Could not get AI settings"));
+                                };
+
+                                let mcp_server = McpServer::run_server(db_get, db_search, config)
+                                    .await
+                                    .map_err(|e| e.to_string())?;
+
                                 return Ok(());
                             },
                         );

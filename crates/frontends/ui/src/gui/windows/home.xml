@@ -118,6 +118,25 @@
 
             <Space classes="default-space-size" />
 
+            <Col id="mcp-container">
+                <Label classes="quick-settings">MCP Server</Label>
+                <Row>
+                    <Col>
+                        <Button id="start-mcp">Start MCP server</Button>
+                        <Label id="mcp-status"></Label>
+                    </Col>
+                    <Void />
+                </Row>
+            </Col>
+
+            <Space classes="default-space-size" />
+
+            <Div classes="hr">
+                <Void />
+            </Div>
+
+            <Space classes="default-space-size" />
+
             <Label id="startup-errors"></Label>
 
             <Space classes="default-space-size" />

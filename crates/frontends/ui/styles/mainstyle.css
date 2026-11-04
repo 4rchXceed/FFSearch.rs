@@ -11,7 +11,6 @@ Window {
 
 Label {
     fg: white;
-    enable: true;
 }
 
 Window {
@@ -42,7 +41,8 @@ Center::virtuals {
 Button,
 Input,
 Select,
-Textarea {
+Textarea,
+.input {
     border-width: 2;
     border-color: rgb(143, 143, 143);
     border-radius: 5;
@@ -61,7 +61,8 @@ Checkbox {
 
 Input,
 Select,
-Textarea {
+Textarea,
+.input {
     width: max;
     selection-color: rgb(200, 200, 200);
 }
@@ -143,10 +144,26 @@ Button::virtuals {
 
 .style-italic {
     font-style: italic;
+    fg: white;
 }
 
 .single-settings>Label {
     font-size: 23;
+}
+
+.set-sub {
+    font-size: 23;
+    fg: white;
+}
+
+.subset-sub {
+    font-size: 19;
+    fg: white;
+}
+
+.set-label {
+    font-size: 16;
+    fg: white;
 }
 
 .subsettings>Label {

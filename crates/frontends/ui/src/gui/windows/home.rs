@@ -161,6 +161,14 @@ impl HomeWindow {
         self.process();
     }
 
+    #[cfg(feature = "mcp")]
+    pub fn set_mcp_status(&mut self, status: &str) {
+        self.qb
+            .b(Dom::get_element_by_id("mcp-status").set_property("text", status));
+
+        self.process();
+    }
+
     pub fn reload_select(&mut self, app: &mut App<GuiState>) {
         self.qb.b(Dom::get_elements_by_class("folders-list")
             .fire_event(CustomElementEvent::ClearSelectOptions()));
@@ -441,7 +449,31 @@ impl HomeWindow {
         {
             self.qb
                 .b(Dom::get_element_by_id("daemon-controls").remove());
+
+            self.qb.b(Dom::get_element_by_id("daemon-sync").remove());
+
             self.process();
+        }
+
+        #[cfg(not(feature = "mcp"))]
+        {
+            self.qb.b(Dom::get_element_by_id("mcp-container").remove());
+
+            self.process();
+        }
+
+        #[cfg(feature = "mcp")]
+        {
+            self.qb
+                .b(Dom::get_element_by_id("start-mcp")
+                    .add_event_listener(EventListenerTypes::Click))
+                .with_callback(|this, _, app| {
+                    if let Err(_) = app.state.task_sender.send(Task::StartMCP) {
+                        this.set_mcp_status("Connection to Task Manager broken");
+                    } else {
+                        this.set_mcp_status("MCP Server started, a task should be created");
+                    }
+                });
         }
 
         #[cfg(feature = "daemon")]

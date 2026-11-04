@@ -135,3 +135,7 @@ Added Daemon Manager part: add folders to daemon & start/stop daemon
 Just a small fix to make de Action pipeline work XD
 Errors: https://git.webdash.dev/ArchXceed/FFSearch.rs/actions/runs/26/jobs/58
 + Also fixed Gitlab CI
+
+## Last commit: 97df8addab59a8860600feb3b9ccd63a4b860774
+Added MCP button + bugfixes
+Added support for path search & binary files

@@ -28,7 +28,7 @@ impl TextExtractor for XbergFileExtractor {
             .map_err(|e| format!("Could not read file metadata: {}", e))?;
 
         if metadata.len() > self.max_single_file_size {
-            return Ok(None);
+            return Ok(Some(String::new()));
         }
 
         let mut content_bin = Vec::new();
@@ -38,7 +38,7 @@ impl TextExtractor for XbergFileExtractor {
 
         let mime_type = match detect_mime_type_from_bytes(&content_bin) {
             Ok(mime) => mime,
-            Err(_) => return Ok(None),
+            Err(_) => return Ok(Some(String::new())),
         };
 
         if mime_type == "application/pdf" {
@@ -51,7 +51,8 @@ impl TextExtractor for XbergFileExtractor {
                 &ExtractionConfig::default(),
             )
             .await
-            .map_err(|e| e.to_string())?;
+            .unwrap_or_default(); // By default, we want to index binary files by an empty string
+            // So we can still search by path
 
             return Ok(Some(
                 result

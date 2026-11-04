@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     path::{MAIN_SEPARATOR_STR, Path, PathBuf},
     sync::Arc,
 };
@@ -9,7 +10,7 @@ use domain::{
 };
 #[cfg(not(test))]
 use tqdm::tqdm;
-use utils::{same_path, to_local_path, trim_custom};
+use utils::{to_local_path, trim_custom};
 
 use crate::{
     indexer::traits::{
@@ -55,7 +56,7 @@ impl FileIndexerSync {
     fn check_one_file(
         &self,
         file: &PathBuf,
-        db_files: &Vec<Document>,
+        db_files: &HashMap<String, &Document>,
         root: String,
         indexer: Arc<dyn FileIndexerProvider>,
     ) -> Result<FileOperationNeeded, FileIndexerError> {
@@ -66,9 +67,7 @@ impl FileIndexerSync {
         let local_file_path = to_local_path(path.clone(), root)
             .ok_or(FileIndexerError::InvalidFilePath(path.clone()))?;
 
-        let same = db_files
-            .iter()
-            .find(|h| same_path((**h).path.as_str(), local_file_path.as_str()));
+        let same = db_files.get(&local_file_path);
 
         if let Some(same) = same
             && same.modification_date != timestamp
@@ -79,6 +78,7 @@ impl FileIndexerSync {
             // Case: the file is not in the database, add it
             return Ok(FileOperationNeeded::Add);
         }
+
         return Ok(FileOperationNeeded::None);
     }
 
@@ -149,6 +149,9 @@ impl FileIndexerSync {
             .await
             .map_err(|e| FileIndexerError::GetAllDocumentsFailed(e.to_string()))?;
 
+        let db_files_hashmap: HashMap<String, &Document> =
+            db_files.iter().map(|f| (f.path.clone(), f)).collect();
+
         let mut all_errors: Vec<FileIndexerError> = Vec::new();
         let mut all_files_to_process = Vec::new();
 
@@ -158,7 +161,8 @@ impl FileIndexerSync {
         let iterator = real_files.iter();
 
         for file in iterator {
-            let result = self.check_one_file(file, &db_files, folder.clone(), indexer.clone());
+            let result =
+                self.check_one_file(file, &db_files_hashmap, folder.clone(), indexer.clone());
 
             if let Err(error) = result {
                 all_errors.push(error);
