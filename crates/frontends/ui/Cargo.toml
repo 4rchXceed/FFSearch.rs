@@ -20,6 +20,7 @@ indexmap = "2.14.2"
 tokio = { version = "1.53.1", features = ["full"] }
 iced-xml = { git = "https://github.com/4rchXceed/iced-xml", branch = "code-rewrite" }
 #iced-xml = { path = "../../../../../../Corbeille/iced-xml/" }
+open = "5"
 
 # FFSearch crates
 settings = { path = "../../settings" }

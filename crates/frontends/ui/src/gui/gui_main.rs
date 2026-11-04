@@ -67,7 +67,7 @@ fn create_window_safe(
         WindowType::ResultsWindow(results, query, indexer_id) => {
             let mut win = ResultsWindow::new(indexer_id)?;
 
-            win.post_create(results, query);
+            win.post_create(results, query, app);
 
             Window::ResultsWindow(win)
         }
