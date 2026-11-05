@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use application::searcher::actions::{get::DatabaseGet, search::SearchDocument};
+use domain::searcher::search_query::SearchContent;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
@@ -205,7 +206,12 @@ impl McpServer {
         let search_results = self
             .context
             .db_search
-            .search(folder_id as u32, query, limit)
+            .search(
+                folder_id as u32,
+                query,
+                limit,
+                SearchContent::ContentAndPath,
+            )
             .await;
 
         match search_results {

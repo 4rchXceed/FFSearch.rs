@@ -3,8 +3,11 @@ use std::{path::Path, sync::Arc};
 use application::searcher::{error::DatabaseError, traits::database::DatabaseProvider};
 use async_trait::async_trait;
 use domain::searcher::{
-    config::DatabaseConfig, document::Document, error::DatabaseDomainError,
-    get_mode::DocumentGetMode, search_query::SearchQuery,
+    config::DatabaseConfig,
+    document::Document,
+    error::DatabaseDomainError,
+    get_mode::DocumentGetMode,
+    search_query::{SearchContent, SearchQuery},
 };
 use tantivy::{
     DateTime, DocAddress, Index, IndexReader, IndexWriter, TantivyDocument, Term,
@@ -233,9 +236,17 @@ impl DatabaseProvider for TantivyDatabase {
             .get_reader()
             .map_err(|e| DatabaseError::Database(e.to_string()))?;
 
+        let search_fields = match search_query.search_for {
+            SearchContent::Path => {
+                vec![self.path_text_field]
+            }
+            SearchContent::ContentAndPath => {
+                vec![self.path_text_field, self.content_field]
+            }
+        };
+
         let searcher = reader.searcher();
-        let mut query_parser =
-            QueryParser::for_index(&self.index, vec![self.path_text_field, self.content_field]);
+        let mut query_parser = QueryParser::for_index(&self.index, search_fields);
 
         query_parser.set_field_boost(self.path_text_field, 2.0);
 

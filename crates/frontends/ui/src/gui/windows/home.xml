@@ -29,14 +29,21 @@
                 <Space id="search-input-space" />
 
                 <Row id="search-filters-cont">
-                    <Space />
+                    <Space classes="small-space" />
                     <Select id="folder-select" classes="folders-list"
                         placeholder="And select a folder"></Select>
                     <Input id="search-limit" placeholder="Max number of documents">100</Input>
                     <Button id="search-btn">Search</Button>
                     <Button id="prompt-btn">Prompt AI</Button>
+                    <Space classes="small-space" />
+                </Row>
+
+                <Row>
+                    <Space />
+                    <Checkbox id="only-file-names">Search only file names</Checkbox>
                     <Space />
                 </Row>
+
                 <Label id="search-status"></Label>
             </Col>
 

@@ -181,5 +181,6 @@ pub fn run_gui(
         create_window,
         CloseMode::Minimize,
         winopen_recv,
+        String::from("FFSearch.rs - File Search")
     );
 }

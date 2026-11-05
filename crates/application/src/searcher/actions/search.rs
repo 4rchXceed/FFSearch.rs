@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use domain::searcher::{document::Document, search_query::SearchQuery};
+use domain::searcher::{
+    document::Document,
+    search_query::{SearchContent, SearchQuery},
+};
 
 use crate::{
     indexer::traits::registry::{FileIndexerRegistry, IndexerId},
@@ -22,10 +25,12 @@ impl SearchDocument {
         folder: IndexerId,
         query: String,
         limit: usize,
+        search_inside_of: SearchContent,
     ) -> Result<Vec<Document>, DatabaseError> {
         let query = SearchQuery {
             query: query,
             limit: limit,
+            search_for: search_inside_of,
         };
 
         let db = self

@@ -57,6 +57,19 @@ Checkbox {
     border-radius: 5;
     border-color: black;
     checkbox-icon: "X" 20 relative 5;
+    fg: white;
+}
+
+#folder-select {
+    width: 2fp;
+}
+
+#search-limit {
+    width: 1fp;
+}
+
+.small-space {
+    width: 50f;
 }
 
 Input,

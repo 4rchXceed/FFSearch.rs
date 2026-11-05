@@ -4213,7 +4213,7 @@ dependencies = [
 [[package]]
 name = "iced-xml"
 version = "0.1.0"
-source = "git+https://github.com/4rchXceed/iced-xml?branch=code-rewrite#84f7d43b3c3c1456315566993b3ce338486782c2"
+source = "git+https://github.com/4rchXceed/iced-xml?branch=code-rewrite#d01a859a87251024f45d1f3d89ebb8a9c8bbf60d"
 dependencies = [
  "iced",
  "log",
@@ -6034,6 +6034,7 @@ name = "mcp"
 version = "0.1.0"
 dependencies = [
  "application",
+ "domain",
  "hyper",
  "hyper-util",
  "log",

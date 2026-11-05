@@ -146,3 +146,6 @@ Added "Open" and "Open folder" buttons
 
 ## Last commit: cad15c6f7e8e8f6206df6be2fa25c5327ee0e830
 Fixed the bug where the program crashes if we opened the UI 2 times
+
+## Last commit: d8a9f61b907c41ad13863df91fb4acf885b9bf48
+Added a "search only paths" checkbox for search + window title

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use application::indexer::traits::registry::IndexerId;
 use domain::indexer::config::FileIndexerConfig;
 use domain::searcher::document::Document;
+use domain::searcher::search_query::SearchContent;
 use iced_xml::app_manager::state_wrapper::App;
 use iced_xml::dom::api::Dom;
 use iced_xml::dom::query_builder::QueryBuilder;
@@ -284,10 +285,25 @@ impl HomeWindow {
 
     fn normal_search(&mut self, app: &mut App<GuiState>, query: String, limit: u32, id: u32) {
         // We can use wait here, since it doesn't take more than a few ms
+        self.qb
+            .b(Dom::get_element_by_id("only-file-names").get_property("checked"));
+
+        let last = self.process();
+
+        let checked = last.data_bool.unwrap_or(false);
+
         let result = app
             .state
             .searcher
-            .search(id, query.clone(), limit as usize)
+            .search(
+                id,
+                query.clone(),
+                limit as usize,
+                match checked {
+                    true => SearchContent::Path,
+                    false => SearchContent::ContentAndPath,
+                },
+            )
             .wait();
 
         match result {
