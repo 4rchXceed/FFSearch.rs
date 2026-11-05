@@ -6,5 +6,5 @@ rust-latest:
   image: rust:latest
   script:
     - apt-get update
-    - apt-get install -y protobuf-compiler
+    - apt-get install -y protobuf-compiler libdbus-1-dev
     - cargo test --verbose --features daemon_worker,ai,mcp_server

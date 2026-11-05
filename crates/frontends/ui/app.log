@@ -1,0 +1,189 @@
+[00:00:00.035] (48b0) INFO   System theme: None
+[00:00:00.036] (48b0) INFO   Window attributes for id `Id(
+    1,
+)`: WindowAttributes {
+    inner_size: Some(
+        Logical(
+            LogicalSize {
+                width: 1024.0,
+                height: 768.0,
+            },
+        ),
+    ),
+    min_inner_size: None,
+    max_inner_size: None,
+    position: None,
+    resizable: true,
+    enabled_buttons: WindowButtons(
+        CLOSE | MINIMIZE | MAXIMIZE,
+    ),
+    title: "FFSearch.rs - File Search",
+    maximized: false,
+    visible: false,
+    transparent: false,
+    blur: false,
+    decorations: true,
+    window_icon: None,
+    preferred_theme: None,
+    resize_increments: None,
+    content_protected: false,
+    window_level: Normal,
+    active: true,
+    cursor: Icon(
+        Default,
+    ),
+    parent_window: None,
+    fullscreen: None,
+    platform_specific: PlatformSpecificWindowAttributes {
+        owner: None,
+        menu: None,
+        taskbar_icon: None,
+        no_redirection_bitmap: false,
+        drag_and_drop: true,
+        skip_taskbar: false,
+        class_name: "Window Class",
+        decoration_shadow: false,
+        backdrop_type: Auto,
+        clip_children: true,
+        border_color: None,
+        title_background_color: None,
+        title_text_color: None,
+        corner_preference: Some(
+            Default,
+        ),
+    },
+}
+[00:00:00.161] (48b0) INFO   Settings {
+    present_mode: AutoVsync,
+    backends: Backends(
+        NOOP | VULKAN | GL | METAL | DX12 | BROWSER_WEBGPU,
+    ),
+    default_font: Font {
+        family: SansSerif,
+        weight: Normal,
+        stretch: Normal,
+        style: Normal,
+    },
+    default_text_size: Pixels(
+        16.0,
+    ),
+    antialiasing: Some(
+        MSAAx4,
+    ),
+}
+[00:00:00.240] (48b0) INFO   Available adapters: [
+    AdapterInfo {
+        name: "Intel(R) UHD Graphics 770",
+        vendor: 32902,
+        device: 18048,
+        device_type: IntegratedGpu,
+        driver: "Intel Corporation",
+        driver_info: "101.5973",
+        backend: Vulkan,
+    },
+    AdapterInfo {
+        name: "Intel(R) UHD Graphics 770",
+        vendor: 32902,
+        device: 18048,
+        device_type: IntegratedGpu,
+        driver: "32.0.101.5973",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Microsoft Basic Render Driver",
+        vendor: 5140,
+        device: 140,
+        device_type: Cpu,
+        driver: "10.0.26100.8521",
+        driver_info: "",
+        backend: Dx12,
+    },
+    AdapterInfo {
+        name: "Intel(R) UHD Graphics 770",
+        vendor: 32902,
+        device: 0,
+        device_type: IntegratedGpu,
+        driver: "",
+        driver_info: "4.6.0 - Build 32.0.101.5973",
+        backend: Gl,
+    },
+]
+[00:00:00.303] (48b0) INFO   Selected: AdapterInfo {
+    name: "Intel(R) UHD Graphics 770",
+    vendor: 32902,
+    device: 18048,
+    device_type: IntegratedGpu,
+    driver: "Intel Corporation",
+    driver_info: "101.5973",
+    backend: Vulkan,
+}
+[00:00:00.304] (48b0) INFO   Available formats: Copied {
+    it: Iter(
+        [
+            Bgra8UnormSrgb,
+            Rgba8UnormSrgb,
+            Bgra8Unorm,
+            Rgba8Unorm,
+        ],
+    ),
+}
+[00:00:00.304] (48b0) INFO   Available alpha modes: [
+    Opaque,
+    Inherit,
+]
+[00:00:00.304] (48b0) INFO   Selected format: Bgra8Unorm with alpha mode: Auto
+[00:00:00.499] (48b0) INFO   Window attributes for id `Id(
+    2,
+)`: WindowAttributes {
+    inner_size: Some(
+        Logical(
+            LogicalSize {
+                width: 1024.0,
+                height: 768.0,
+            },
+        ),
+    ),
+    min_inner_size: None,
+    max_inner_size: None,
+    position: None,
+    resizable: true,
+    enabled_buttons: WindowButtons(
+        CLOSE | MINIMIZE | MAXIMIZE,
+    ),
+    title: "FFSearch.rs - File Search",
+    maximized: false,
+    visible: false,
+    transparent: false,
+    blur: false,
+    decorations: true,
+    window_icon: None,
+    preferred_theme: None,
+    resize_increments: None,
+    content_protected: false,
+    window_level: Normal,
+    active: true,
+    cursor: Icon(
+        Default,
+    ),
+    parent_window: None,
+    fullscreen: None,
+    platform_specific: PlatformSpecificWindowAttributes {
+        owner: None,
+        menu: None,
+        taskbar_icon: None,
+        no_redirection_bitmap: false,
+        drag_and_drop: true,
+        skip_taskbar: false,
+        class_name: "Window Class",
+        decoration_shadow: false,
+        backdrop_type: Auto,
+        clip_children: true,
+        border_color: None,
+        title_background_color: None,
+        title_text_color: None,
+        corner_preference: Some(
+            Default,
+        ),
+    },
+}
