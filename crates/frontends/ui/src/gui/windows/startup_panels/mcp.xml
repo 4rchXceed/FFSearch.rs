@@ -1,0 +1,14 @@
+<Col>
+    <Label classes="smaller-title">MCP</Label>
+
+    <Space classes="default-space-size" />
+    <Space classes="default-space-size" />
+
+    <Label>By downloading the "full" version of the app, you have access to an MCP server</Label>
+    <Space classes="default-space-size" />
+    <Label>You can configure it's port and host in the settings</Label>
+    <Space classes="default-space-size" />
+    <Label>Then you can click on "Start MCP Server" and it will start the MCP server</Label>
+    <Space classes="default-space-size" />
+    <Label>You can now connect to it with a client</Label>
+</Col>

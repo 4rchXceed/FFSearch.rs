@@ -1,0 +1,14 @@
+<Col>
+    <Label classes="smaller-title">Daemon</Label>
+
+    <Space classes="default-space-size" />
+    <Space classes="default-space-size" />
+
+    <Label>By downloading the "normal" or "full" version of the app, you have access to a "Daemon"</Label>
+    <Space classes="default-space-size" />
+    <Label>"Daemon" means a background process.</Label>
+    <Space classes="default-space-size" />
+    <Label>You can click on "Start Daemon", "Add" a folder to it and it will sync files whenever they are saved / created</Label>
+    <Space classes="default-space-size" />
+    <Label>With that you don't need to "Update Files" everytime you change something</Label>
+</Col>

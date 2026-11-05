@@ -11,7 +11,7 @@ use application::{
 };
 use domain::{
     indexer::config::FileIndexerConfig,
-    searcher::{config::DatabaseConfig, document::Document},
+    searcher::{config::DatabaseConfig, document::Document, search_query::SearchContent},
 };
 use infrastructure::{
     indexer::stdfile::{indexer::StdFileIndexerProvider, registry::InMemoryRegistry},
@@ -172,7 +172,12 @@ async fn test_database_add_remove_search() {
     // Test: search()
     // ---------------------------------------
     let result = search
-        .search(id, String::from("Hatsune"), 2)
+        .search(
+            id,
+            String::from("Hatsune"),
+            2,
+            SearchContent::ContentAndPath,
+        )
         .await
         .expect("Failed to search");
 
@@ -180,7 +185,7 @@ async fn test_database_add_remove_search() {
     assert_eq!(result[0].path, "file1.txt");
 
     let result = search
-        .search(id, String::from("HEHE"), 2)
+        .search(id, String::from("HEHE"), 2, SearchContent::ContentAndPath)
         .await
         .expect("Failed to search");
 
@@ -200,7 +205,12 @@ async fn test_database_add_remove_search() {
         .expect("Failed to apply changes");
 
     let result = search
-        .search(id, String::from("Hatsune"), 2)
+        .search(
+            id,
+            String::from("Hatsune"),
+            2,
+            SearchContent::ContentAndPath,
+        )
         .await
         .expect("Failed to search");
 

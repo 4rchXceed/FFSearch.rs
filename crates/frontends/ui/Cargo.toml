@@ -11,7 +11,6 @@ image = { version = "0.25.10", default-features = false, features = ["png"] }
 thiserror = "2.0.21"
 rustydialogs = "0.4.2"
 tempdir = "0.3.7"
-simple_logger = "5.2.0"
 log = "0.4.34"
 wait = "0.2.6"
 rfd = "0.17.2"
@@ -31,6 +30,7 @@ domain = { path = "../../domain" }
 # Features
 mcp = { path = "../../frontends/mcp", optional = true }
 daemon = { path = "../../frontends/daemon", optional = true }
+simple-logging = "2.0.2"
 
 [features]
 ai=["infrastructure/ai", "settings/ai"]

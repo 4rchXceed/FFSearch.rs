@@ -1,4 +1,4 @@
-use log::Level;
+#![windows_subsystem = "windows"]
 
 use crate::{
     errors::{AppError, show_error},
@@ -14,7 +14,7 @@ mod manager;
 mod systray;
 
 async fn main_safe() -> Result<(), AppError> {
-    simple_logger::init_with_level(Level::Info)
+    simple_logging::log_to_file(String::from("app.log"), log::LevelFilter::Info)
         .map_err(|e| AppError::FailedToInitLogger(e.to_string()))?;
 
     let (tx, mut rx1) = tokio::sync::broadcast::channel::<MenuAction>(100);

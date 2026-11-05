@@ -17,6 +17,12 @@ use super::errors::WindowCreationError;
 pub enum Panels {
     Welcome,
     HowItWorks,
+    #[cfg(feature = "ai")]
+    Ai,
+    #[cfg(feature = "daemon_worker")]
+    Daemon,
+    #[cfg(feature = "mcp_server")]
+    Mcp,
 }
 
 pub struct StartupWindow {
@@ -81,6 +87,12 @@ impl StartupWindow {
         let code = match self.current_panel {
             Panels::Welcome => include_str!("startup_panels/welcome.xml"),
             Panels::HowItWorks => include_str!("startup_panels/howitworks.xml"),
+            #[cfg(feature = "ai")]
+            Panels::Ai => include_str!("startup_panels/ai.xml"),
+            #[cfg(feature = "mcp_server")]
+            Panels::Mcp => include_str!("startup_panels/mcp.xml"),
+            #[cfg(feature = "daemon_worker")]
+            Panels::Daemon => include_str!("startup_panels/daemon.xml"),
         };
 
         let mut element = match try_xml(code) {
@@ -106,15 +118,83 @@ impl StartupWindow {
             .with_callback(|this, _, app| {
                 match this.current_panel {
                     Panels::Welcome => {
-                        this.qb
-                            .b(Dom::get_element_by_id("next").set_property("text", "Finish"));
-
-                        this.process();
-
                         this.current_panel = Panels::HowItWorks;
                     }
                     Panels::HowItWorks => {
+                        #[cfg(not(feature = "ai"))]
+                        #[cfg(not(feature = "mcp_server"))]
+                        #[cfg(not(feature = "daemon_worker"))]
+                        {
+                            this.qb.close_window(this.me_winid, app);
+
+                            this.process();
+
+                            return;
+                        }
+
+                        #[cfg(feature = "ai")]
+                        {
+                            this.current_panel = Panels::Ai;
+                        }
+
+                        #[cfg(not(feature = "ai"))]
+                        #[cfg(feature = "mcp_server")]
+                        {
+                            this.current_panel = Panels::Mcp;
+                        }
+
+                        #[cfg(not(feature = "ai"))]
+                        #[cfg(not(feature = "mcp_server"))]
+                        #[cfg(feature = "daemon_worker")]
+                        {
+                            this.current_panel = Panels::Daemon;
+                        }
+                    }
+                    #[cfg(feature = "ai")]
+                    Panels::Ai => {
+                        #[cfg(not(feature = "mcp_server"))]
+                        #[cfg(not(feature = "daemon_worker"))]
+                        {
+                            this.qb.close_window(this.me_winid, app);
+
+                            this.process();
+
+                            return;
+                        }
+
+                        #[cfg(feature = "mcp_server")]
+                        {
+                            this.current_panel = Panels::Mcp;
+                        }
+
+                        #[cfg(not(feature = "mcp_server"))]
+                        #[cfg(feature = "daemon_worker")]
+                        {
+                            this.current_panel = Panels::Daemon;
+                        }
+                    }
+                    #[cfg(feature = "mcp")]
+                    Panels::Mcp => {
+                        #[cfg(not(feature = "daemon_worker"))]
+                        {
+                            this.qb.close_window(this.me_winid, app);
+
+                            this.process();
+
+                            return;
+                        }
+
+                        #[cfg(feature = "daemon_worker")]
+                        {
+                            this.current_panel = Panels::Daemon;
+                        }
+                    }
+                    #[cfg(feature = "daemon_worker")]
+                    Panels::Daemon => {
                         this.qb.close_window(this.me_winid, app);
+
+                        this.process();
+
                         return;
                     }
                 }

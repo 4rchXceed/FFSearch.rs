@@ -8,10 +8,7 @@
     <Space classes="default-space-size" />
     <Label>This folder is named ".ffsearch"</Label>
     <Space classes="default-space-size" />
-    <Label>This is done, so the program doesn't need to search through your files every time you
-        search something</Label>
+    <Label>This is done, so the program doesn't need to search through your files every time you search something</Label>
     <Space classes="default-space-size" />
-    <Label>To synchronise the database with the real files, you select the folder you want to sync
-        and
-        click the "Update Files" button</Label>
+    <Label>To synchronise the database with the real files, you select the folder you want to sync and click the "Update Files" button</Label>
 </Col>

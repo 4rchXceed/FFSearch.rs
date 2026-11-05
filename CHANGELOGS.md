@@ -149,3 +149,6 @@ Fixed the bug where the program crashes if we opened the UI 2 times
 
 ## Last commit: d8a9f61b907c41ad13863df91fb4acf885b9bf48
 Added a "search only paths" checkbox for search + window title
+
+## Last commit: f7a7b2250bed8cd97478a3246bde7f9b20b22be1
+Polished for the V1.0 release

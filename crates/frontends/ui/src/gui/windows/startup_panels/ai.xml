@@ -1,0 +1,14 @@
+<Col>
+    <Label classes="smaller-title">AI</Label>
+
+    <Space classes="default-space-size" />
+    <Space classes="default-space-size" />
+
+    <Label>By downloading the "full" version of the app, you have an AI assistant</Label>
+    <Space classes="default-space-size" />
+    <Label>You can configure it's provider (Ollama or OpenAI) in the Settings</Label>
+    <Space classes="default-space-size" />
+    <Label>Once configured, select a folder (that isn't too big) and click enable AI. This will create a RAG</Label>
+    <Space classes="default-space-size" />
+    <Label>Once the RAG created, you can click "Prompt AI" instead of "Search", this will open a chatbot window</Label>
+</Col>
