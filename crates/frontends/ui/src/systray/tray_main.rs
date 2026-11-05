@@ -46,7 +46,7 @@ impl FFSearchTray {
 
         let sender_clone = sender.clone();
 
-        tray.add_menu_item("exit", move || match sender_clone.send(MenuAction::Exit) {
+        tray.add_menu_item("Exit", move || match sender_clone.send(MenuAction::Exit) {
             Ok(_) => {}
             Err(e) => show_error(AppError::BroadcastFailed(e.to_string())),
         })

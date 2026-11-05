@@ -23,6 +23,8 @@ pub enum AppError {
     #[cfg(feature = "daemon")]
     #[error("Could not create the daemon: {0}")]
     CouldNotCreateDaemon(String),
+    #[error("Failed to open ui: {0}")]
+    FailedToOpenUI(String),
 }
 
 pub fn show_error(error: AppError) {

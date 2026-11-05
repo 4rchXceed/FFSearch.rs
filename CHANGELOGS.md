@@ -139,3 +139,10 @@ Errors: https://git.webdash.dev/ArchXceed/FFSearch.rs/actions/runs/26/jobs/58
 ## Last commit: 97df8addab59a8860600feb3b9ccd63a4b860774
 Added MCP button + bugfixes
 Added support for path search & binary files
+
+## Last commit: 3288ddcd8f65f25d32e49ad329016eecfc05225b
+Fixed bugs
+Added "Open" and "Open folder" buttons
+
+## Last commit: cad15c6f7e8e8f6206df6be2fa25c5327ee0e830
+Fixed the bug where the program crashes if we opened the UI 2 times

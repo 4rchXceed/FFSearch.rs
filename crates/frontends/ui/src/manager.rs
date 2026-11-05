@@ -31,6 +31,7 @@ use tokio::task::JoinHandle;
 
 use crate::errors::{AppError, show_error};
 use crate::gui::gui_main::run_gui;
+use crate::gui::params::WindowParams;
 
 pub enum Task {
     SyncFolder(u32),
@@ -323,7 +324,7 @@ impl AppManager {
         return Some(handle);
     }
 
-    pub fn open_ui(&mut self) {
+    pub fn open_ui(&mut self, recv: Receiver<WindowParams>) {
         match run_gui(
             self.folders_registry.clone(),
             self.settings.clone(),
@@ -333,9 +334,17 @@ impl AppManager {
             self.first_opening,
             #[cfg(feature = "daemon")]
             self.daemon_mgr.clone(),
+            recv,
         ) {
             Ok(_) => {}
             Err(e) => show_error(AppError::OpenUIError(e.to_string())),
+        }
+    }
+
+    pub fn reopen_ui(sender: Sender<WindowParams>) {
+        match sender.send(WindowParams::home(Vec::new(), false)) {
+            Err(e) => show_error(AppError::FailedToOpenUI(e.to_string())),
+            _ => {}
         }
     }
 }

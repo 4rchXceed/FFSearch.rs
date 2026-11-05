@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 
 use application::indexer::traits::registry::FileIndexerRegistry;
@@ -8,7 +8,7 @@ use application::searcher::actions::search::SearchDocument;
 use daemon::manager::DaemonManager;
 use iced_xml::app_manager::app_manager::WindowManager;
 use iced_xml::app_manager::state_wrapper::App;
-use iced_xml::app_manager::utils::WindowId;
+use iced_xml::app_manager::utils::{CloseMode, WindowId};
 use iced_xml::window_manager;
 use iced_xml::window_wrapper::AppResult;
 use iced_xml::xml_struct::xml_element::XmlElement;
@@ -163,6 +163,7 @@ pub fn run_gui(
     startup_errors: Vec<String>,
     first_time: bool,
     #[cfg(feature = "daemon")] daemon_mgr: Arc<Mutex<DaemonManager>>,
+    winopen_recv: Receiver<WindowParams>,
 ) -> AppResult {
     return WindowManager::run_app(
         WindowParams::home(startup_errors, first_time),
@@ -178,5 +179,7 @@ pub fn run_gui(
         },
         DEFAULT_ENGINE_SETTINGS.clone(),
         create_window,
+        CloseMode::Minimize,
+        winopen_recv,
     );
 }

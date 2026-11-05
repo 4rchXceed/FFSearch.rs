@@ -2,6 +2,7 @@ use log::Level;
 
 use crate::{
     errors::{AppError, show_error},
+    gui::params::WindowParams,
     systray::tray_main::FFSearchTray,
 };
 
@@ -35,9 +36,12 @@ async fn main_safe() -> Result<(), AppError> {
         &String::from("config.ini")
     };
 
+    let (tx, rx) = std::sync::mpsc::channel::<WindowParams>();
+
     let mut manager = AppManager::new(config_path.clone()).await?;
 
     // Other handlers
+    let tx_clone = tx.clone();
     let _th = tokio::spawn(async move {
         loop {
             match rx2.recv().await {
@@ -45,7 +49,7 @@ async fn main_safe() -> Result<(), AppError> {
                     MenuAction::Exit => {
                         std::process::exit(0);
                     }
-                    _ => {}
+                    MenuAction::OpenUI => AppManager::reopen_ui(tx_clone.clone()),
                 },
                 // Tray is closed
                 Err(_) => {
@@ -55,13 +59,13 @@ async fn main_safe() -> Result<(), AppError> {
         }
     });
 
-    manager.open_ui();
+    manager.open_ui(rx);
 
     loop {
         match rx1.recv().await {
             Ok(msg) => match msg {
                 MenuAction::OpenUI => {
-                    manager.open_ui();
+                    AppManager::reopen_ui(tx.clone());
                 }
                 _ => {}
             },
